@@ -1,0 +1,8 @@
+
+{
+  "name": "SculptuurRadar - Beeldenparken in Europa",
+  "description": "Een elegante gids voor de meest adembenemende openluchtmusea en kunstparken in West-Europa, met interactieve zoekfuncties en AI-inzichten.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
