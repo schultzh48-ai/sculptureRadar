@@ -43,7 +43,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
   };
 
   return (
-    <div className={`flex flex-col md:flex-row gap-2 bg-white p-2 rounded-[2.5rem] border border-stone-200 shadow-sm focus-within:border-blue-400 transition-all ${className}`}>
+    <div className={`flex flex-col md:flex-row gap-2 bg-white p-2 rounded-[2.5rem] border border-stone-200 shadow-sm focus-within:border-blue-500 transition-all ${className}`}>
       <div className="relative flex-1 flex items-center">
         <i className="fas fa-search absolute left-6 text-stone-400"></i>
         <input 
@@ -66,7 +66,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
         </button>
         <button 
           onClick={toggleRadar}
-          className={`px-8 py-4 rounded-[2rem] text-xs font-black uppercase tracking-widest transition-all ${isNearbyMode ? 'bg-red-500 text-white' : 'bg-stone-900 text-white'}`}
+          className={`px-8 py-4 rounded-[2rem] text-xs font-black uppercase tracking-widest transition-all ${isNearbyMode ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-stone-900 text-white'}`}
         >
           <i className="fas fa-crosshairs mr-2"></i>
           Radar
@@ -76,13 +76,29 @@ const SearchBar: React.FC<SearchBarProps> = ({
   );
 };
 
-const RadarAnimation = () => (
-  <div className="relative w-16 h-16 flex items-center justify-center">
-    <div className="absolute inset-0 border-2 border-blue-200 rounded-full"></div>
-    <div className="absolute inset-2 border border-blue-100 rounded-full"></div>
-    <div className="absolute inset-4 border border-blue-50 rounded-full"></div>
-    <div className="absolute top-0 left-1/2 w-0.5 h-1/2 bg-gradient-to-t from-blue-500 to-transparent origin-bottom animate-[spin_2s_linear_infinite]"></div>
-    <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-ping"></div>
+const ModernRadarIcon = ({ active = true }: { active?: boolean }) => (
+  <div className="relative w-16 h-16">
+    <svg viewBox="0 0 100 100" className="w-full h-full fill-none stroke-blue-500/20">
+      <circle cx="50" cy="50" r="48" strokeWidth="1" />
+      <circle cx="50" cy="50" r="32" strokeWidth="1" />
+      <circle cx="50" cy="50" r="16" strokeWidth="1" />
+      <line x1="50" y1="2" x2="50" y2="98" strokeWidth="0.5" />
+      <line x1="2" y1="50" x2="98" y2="50" strokeWidth="0.5" />
+      {active && (
+        <g className="animate-[spin_4s_linear_infinite] origin-center">
+          <path d="M50 50 L50 2 A48 48 0 0 1 98 50 Z" fill="url(#radarGradient)" />
+        </g>
+      )}
+      <defs>
+        <linearGradient id="radarGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+          <stop offset="0%" stopColor="rgb(59, 130, 246)" stopOpacity="0.4" />
+          <stop offset="100%" stopColor="rgb(59, 130, 246)" stopOpacity="0" />
+        </linearGradient>
+      </defs>
+    </svg>
+    <div className={`absolute inset-0 flex items-center justify-center`}>
+      <div className={`w-2 h-2 bg-blue-500 rounded-full ${active ? 'animate-ping' : ''}`}></div>
+    </div>
   </div>
 );
 
@@ -100,11 +116,11 @@ const App: React.FC = () => {
   const fetchRegionVibe = async (queryOrCoords: string) => {
     setIsVibeLoading(true);
     try {
-      const prompt = `Schrijf een sfeervol kort verhaal (max 70 woorden) over de artistieke identiteit en beeldenparken in het specifieke zoekgebied: "${queryOrCoords}". Focus op hoe de lokale natuur of architectuur in deze omgeving samensmelt met moderne beeldhouwkunst. Gebruik geen titels of JSON.`;
+      const prompt = `Schrijf een sfeervol kort verhaal (max 60 woorden) over de artistieke identiteit van de regio: "${queryOrCoords}". Focus op de dialoog tussen kunst en natuur. Geen JSON.`;
       const { text } = await askGemini(prompt, []);
       setRegionVibe(text.replace(/\[|\]/g, "").trim());
     } catch (e) {
-      setRegionVibe("In dit gebied versmelten kunst en landschap tot een unieke openluchtbeleving.");
+      setRegionVibe("Een regio waar natuurlijke schoonheid en menselijke creativiteit harmonieus samensmelten.");
     } finally {
       setIsVibeLoading(false);
     }
@@ -118,22 +134,25 @@ const App: React.FC = () => {
     setIsAiLoading(true);
     setRegionVibe("");
 
+    // Start AI aanroepen parallel voor snelheid
+    const vibePromise = finalQuery 
+      ? fetchRegionVibe(finalQuery) 
+      : (lat && lng ? fetchRegionVibe(`bij ${lat.toFixed(2)}, ${lng.toFixed(2)}`) : Promise.resolve());
+
     if (finalQuery) {
-      fetchRegionVibe(finalQuery);
       const initialResults = INITIAL_PARKS.filter(p => 
         p.location.toLowerCase().includes(finalQuery.toLowerCase()) || 
         p.name.toLowerCase().includes(finalQuery.toLowerCase())
       );
       setAiParks(initialResults);
-    } else if (lat && lng) {
-      fetchRegionVibe(`regio op coördinaten ${lat.toFixed(2)}, ${lng.toFixed(2)}`);
+    } else {
       setAiParks([]);
     }
 
     try {
-      let prompt = `Identificeer ALLE beeldenparken en beeldentuinen binnen een straal van MAXIMAAL 50km rondom ${finalQuery || 'coördinaten ' + lat + ',' + lng}. Gebruik Google Search om de exacte locatie te verifiëren.`;
+      const searchPrompt = `Zoek alle beeldenparken en beeldentuinen binnen 40km van ${finalQuery || 'coördinaten ' + lat + ',' + lng}. Gebruik Google Search voor geografische precisie. Reageer alleen met JSON array.`;
       
-      const { text } = await askGemini(prompt, []);
+      const { text } = await askGemini(searchPrompt, []);
       let discovered: SculpturePark[] = [];
       try {
         discovered = JSON.parse(text).map((p: any) => ({ 
@@ -142,17 +161,16 @@ const App: React.FC = () => {
           isAiDiscovered: true 
         }));
       } catch (e) {
-        console.error("JSON Parse Error", e);
+        console.error("JSON Error", e);
       }
 
       setAiParks(prev => {
         const existingNames = new Set(prev.map(d => d.name.toLowerCase()));
         
-        // Filter resultaten: Alleen als ze echt in de buurt zijn (als we een referentiepunt hebben)
         const validatedDiscovered = discovered.filter(p => {
             if (lat && lng) {
                 const realDist = getDistance(lat, lng, p.lat, p.lng);
-                return realDist <= 75; // Ruime marge voor 'regio'
+                return realDist <= 60; 
             }
             return true;
         });
@@ -162,7 +180,7 @@ const App: React.FC = () => {
         if (lat && lng) {
           const nearbyDefaults = INITIAL_PARKS.filter(p => {
             const dist = getDistance(lat, lng, p.lat, p.lng);
-            return dist <= 60 && !existingNames.has(p.name.toLowerCase());
+            return dist <= 50 && !existingNames.has(p.name.toLowerCase());
           });
           return [...prev, ...uniqueDiscovered, ...nearbyDefaults];
         }
@@ -171,10 +189,12 @@ const App: React.FC = () => {
       });
 
     } catch (e) {
-      console.error("Deep Search failed", e);
+      console.error("Search failed", e);
     } finally {
       setIsAiLoading(false);
     }
+    
+    await vibePromise;
   }, []);
 
   const handleSearchTrigger = useCallback(() => {
@@ -199,7 +219,7 @@ const App: React.FC = () => {
           setIsNearbyMode(true);
           setSearchTerm('');
         }, (err) => {
-          alert("Locatie toegang vereist voor Radar.");
+          alert("GPS toegang is nodig voor de Radar modus.");
         });
       }
     } else {
@@ -222,12 +242,12 @@ const App: React.FC = () => {
   }, [aiParks, userLocation]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#f9f9f7]">
-      <header className="bg-white border-b border-stone-200 px-6 py-4 sticky top-0 z-30 shadow-sm">
+    <div className="min-h-screen flex flex-col bg-[#fbfbf9]">
+      <header className="bg-white/80 backdrop-blur-md border-b border-stone-100 px-6 py-4 sticky top-0 z-30">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.location.reload()}>
-            <div className="w-8 h-8 bg-stone-900 rounded-lg flex items-center justify-center text-white"><i className="fas fa-compass"></i></div>
-            <h1 className="text-xl font-bold text-stone-900 serif">Sculptuur<span className="text-stone-400 italic">Radar</span></h1>
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => window.location.reload()}>
+            <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center text-white transition-transform group-hover:rotate-12"><i className="fas fa-radar"></i></div>
+            <h1 className="text-2xl font-bold text-stone-900 serif">Sculptuur<span className="text-blue-600 italic">Radar</span></h1>
           </div>
           {(hasSearched || isNearbyMode) && (
             <div className="w-full max-w-xl">
@@ -238,18 +258,21 @@ const App: React.FC = () => {
                 toggleRadar={toggleRadar}
                 isAiLoading={isAiLoading}
                 isNearbyMode={isNearbyMode}
-                className="!py-1 !rounded-2xl !shadow-none !border-stone-100" 
+                className="!py-1 !rounded-2xl !shadow-none !border-stone-100 bg-stone-50/50" 
               />
             </div>
           )}
         </div>
       </header>
 
-      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-10">
+      <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-12">
         {!hasSearched && !isNearbyMode ? (
-          <div className="text-center py-20 max-w-2xl mx-auto">
-            <h2 className="text-6xl font-bold text-stone-900 serif mb-6 tracking-tight">SculptuurRadar</h2>
-            <p className="text-stone-500 text-xl mb-10 font-light leading-relaxed">Voer een stad of regio in. We tonen direct bekende locaties en starten een diepe radarscan voor nieuwe ontdekkingen.</p>
+          <div className="text-center py-24 max-w-3xl mx-auto">
+            <div className="mb-12 flex justify-center">
+                <ModernRadarIcon active={false} />
+            </div>
+            <h2 className="text-7xl font-bold text-stone-900 serif mb-8 tracking-tight">SculptuurRadar</h2>
+            <p className="text-stone-500 text-2xl mb-12 font-light leading-relaxed">Scan steden of gebruik de radar voor beeldenparken in jouw omgeving.</p>
             <SearchBar 
               searchTerm={searchTerm}
               setSearchTerm={setSearchTerm}
@@ -261,44 +284,39 @@ const App: React.FC = () => {
           </div>
         ) : (
           <>
-            <div className="flex justify-between items-end mb-8 border-b border-stone-200 pb-6">
+            <div className="flex justify-between items-end mb-12 border-b border-stone-200 pb-8">
               <div>
-                <h2 className="text-[10px] uppercase tracking-widest font-black text-stone-400 mb-2">
-                  {isAiLoading ? 'Scan Bezig...' : 'Scan Voltooid'}
+                <h2 className="text-[11px] uppercase tracking-[0.3em] font-black text-stone-400 mb-3 flex items-center gap-2">
+                  {isAiLoading ? (
+                    <><span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span> Scan in uitvoering</>
+                  ) : 'Resultaten geoptimaliseerd'}
                 </h2>
-                <div className="text-3xl font-bold text-stone-900 serif">{filteredParks.length} Resultaten</div>
+                <div className="text-4xl font-bold text-stone-900 serif">{filteredParks.length} Locaties gevonden</div>
               </div>
               {isAiLoading && (
-                <div className="flex items-center gap-3 bg-blue-600 text-white px-5 py-2.5 rounded-full shadow-lg">
-                   <i className="fas fa-satellite-dish animate-bounce"></i>
-                   <span className="text-[10px] font-black uppercase tracking-widest">Diepe radar scan...</span>
+                <div className="flex items-center gap-4 bg-white border border-stone-200 px-6 py-3 rounded-2xl shadow-sm">
+                   <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                   <span className="text-xs font-bold uppercase tracking-widest text-stone-600">Deep Radar Scan...</span>
                 </div>
               )}
             </div>
 
             {(regionVibe || isVibeLoading) && (
-              <div className="mb-10 p-8 bg-blue-50/50 rounded-3xl border border-blue-100 relative overflow-hidden group">
-                <div className="flex flex-col md:flex-row items-center gap-8">
-                  {isVibeLoading ? (
-                    <div className="flex-shrink-0">
-                      <RadarAnimation />
-                    </div>
-                  ) : (
-                    <div className="flex-shrink-0 text-blue-300">
-                      <i className="fas fa-sparkles text-4xl"></i>
-                    </div>
-                  )}
+              <div className="mb-14 p-10 bg-white rounded-[2rem] border border-stone-100 shadow-sm relative overflow-hidden group">
+                <div className="flex flex-col md:flex-row items-center gap-10">
+                  <div className="flex-shrink-0">
+                    <ModernRadarIcon active={isVibeLoading} />
+                  </div>
                   
                   <div className="flex-1">
                     {isVibeLoading ? (
-                      <div className="flex flex-col gap-2">
-                        <div className="w-1/2 h-2.5 bg-blue-200 rounded-full animate-pulse"></div>
-                        <div className="w-full h-2.5 bg-blue-100 rounded-full animate-pulse"></div>
-                        <div className="w-3/4 h-2.5 bg-blue-50 rounded-full animate-pulse"></div>
-                        <span className="text-[10px] font-black uppercase tracking-widest text-blue-400 mt-2">Omgeving verkennen...</span>
+                      <div className="space-y-3">
+                        <div className="w-1/3 h-2.5 bg-stone-100 rounded-full animate-pulse"></div>
+                        <div className="w-full h-2.5 bg-stone-50 rounded-full animate-pulse"></div>
+                        <div className="w-2/3 h-2.5 bg-stone-50/50 rounded-full animate-pulse"></div>
                       </div>
                     ) : (
-                      <p className="text-lg text-stone-800 italic leading-relaxed font-medium serif max-w-4xl">
+                      <p className="text-2xl text-stone-800 italic leading-snug font-medium serif max-w-4xl">
                         "{regionVibe}"
                       </p>
                     )}
@@ -307,14 +325,14 @@ const App: React.FC = () => {
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
               {filteredParks.map(park => (
                 <ParkCard key={park.id} park={park} onClick={(p) => setSelectedPark({ ...p, distance: p.distance })} />
               ))}
               {isAiLoading && (
-                <div className="col-span-1 border-2 border-dashed border-stone-200 rounded-2xl flex flex-col items-center justify-center p-10 opacity-50 bg-stone-50/50">
-                  <div className="w-10 h-10 border-2 border-stone-300 border-t-stone-900 rounded-full animate-spin mb-4"></div>
-                  <span className="text-[8px] font-black uppercase tracking-widest text-stone-400">Nieuwe parken lokaliseren</span>
+                <div className="col-span-1 border-2 border-dashed border-stone-200 rounded-3xl flex flex-col items-center justify-center p-12 opacity-40 bg-stone-50/30">
+                  <i className="fas fa-radar text-2xl mb-4 animate-pulse text-stone-400"></i>
+                  <span className="text-[9px] font-black uppercase tracking-widest text-stone-400">Analyseert omgeving...</span>
                 </div>
               )}
             </div>
