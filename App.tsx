@@ -78,23 +78,22 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      const locationContext = query ? `in de buurt van ${query}` : `rondom coördinaten ${lat},${lng}`;
-      const prompt = `Lijst minimaal 15 beeldenparken en land-art locaties ${locationContext}. Geef een JSON object terug.`;
+      const locationContext = query ? `in de buurt van ${query}` : `rondom de coördinaten ${lat}, ${lng}`;
+      const prompt = `Zoek minimaal 15 beeldenparken en land-art locaties ${locationContext}. Reageer alleen met de gevraagde JSON.`;
       
       const res = await askGemini(prompt, []);
       
       if (res.text === "ERROR") {
-        setError("De AI-service is momenteel niet bereikbaar. Controleer je internetverbinding of API-sleutel.");
+        setError(res.error || "De AI-service kon niet worden gestart. Controleer of de API_KEY correct is ingesteld.");
         return;
       }
 
-      // Probeer de JSON te parsen
       let data;
       try {
         data = JSON.parse(res.text);
       } catch (parseError) {
         console.error("JSON Parse Error:", res.text);
-        setError("Het antwoord van de AI kon niet worden gelezen. Probeer het nog eens.");
+        setError("De AI gaf geen geldig resultaat terug. Probeer het opnieuw.");
         return;
       }
 
@@ -103,18 +102,16 @@ const App: React.FC = () => {
           ...p, 
           id: `ai-${Math.random().toString(36).substr(2, 9)}`, 
           isAiDiscovered: true,
-          // Zorg dat lat/lng nummers zijn
           lat: parseFloat(p.lat) || 0,
           lng: parseFloat(p.lng) || 0
         }));
         setAiParks(results);
         setCuratorText(data.curatorVibe || 'Ik heb de volgende locaties voor je gevonden.');
       } else {
-        setError("Geen locaties gevonden in deze regio.");
+        setError("Er zijn geen specifieke beeldenparken gevonden voor deze zoekopdracht.");
       }
     } catch (e: any) {
-      console.error("General Error:", e);
-      setError("Er is een onverwachte fout opgetreden: " + e.message);
+      setError("Er is een probleem opgetreden bij het laden van de kunst: " + e.message);
     } finally {
       setIsAiLoading(false);
     }
@@ -123,7 +120,7 @@ const App: React.FC = () => {
   const toggleRadar = useCallback(() => {
     if (!isNearbyMode) {
       if (!navigator.geolocation) {
-        alert("Geolocatie wordt niet ondersteund door deze browser.");
+        alert("Geolocatie wordt niet ondersteund.");
         return;
       }
       navigator.geolocation.getCurrentPosition((pos) => {
@@ -132,8 +129,7 @@ const App: React.FC = () => {
         setIsNearbyMode(true);
         performSearch("", loc.lat, loc.lng);
       }, (err) => {
-        alert("Kan je locatie niet ophalen. Controleer je privacy-instellingen.");
-        console.error(err);
+        alert("Locatie-toegang geweigerd. Zoek handmatig op een stad.");
       });
     } else {
       setIsNearbyMode(false);
@@ -172,17 +168,17 @@ const App: React.FC = () => {
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-12">
         {!hasSearched && !isNearbyMode ? (
           <div className="text-center py-24 max-w-2xl mx-auto">
-            <h2 className="text-5xl font-bold text-stone-900 serif mb-6">Ontdek kunst in de open lucht.</h2>
-            <p className="text-stone-500 mb-10 text-lg italic">Scan elke regio voor beeldenparken en land-art.</p>
+            <h2 className="text-5xl font-bold text-stone-900 serif mb-6 animate-in fade-in zoom-in duration-700">Ontdek kunst in de open lucht.</h2>
+            <p className="text-stone-500 mb-10 text-lg italic animate-in fade-in slide-in-from-bottom-4 duration-1000">Scan elke regio voor beeldenparken en land-art.</p>
             <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleSearchTrigger={() => performSearch(searchTerm)} toggleRadar={toggleRadar} isAiLoading={isAiLoading} isNearbyMode={isNearbyMode} />
           </div>
         ) : (
           <>
             {error && (
-              <div className="mb-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-red-900 shadow-sm flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
-                <i className="fas fa-exclamation-triangle text-red-500 mt-1"></i>
+              <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 shadow-sm flex items-start gap-4 animate-in fade-in slide-in-from-top-4">
+                <i className="fas fa-key text-amber-500 mt-1"></i>
                 <div>
-                  <p className="text-sm font-bold uppercase tracking-tight mb-1">Oeps!</p>
+                  <p className="text-sm font-bold uppercase tracking-tight mb-1">Configuratie-opmerking</p>
                   <p className="text-sm opacity-80">{error}</p>
                 </div>
               </div>
