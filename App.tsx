@@ -50,10 +50,10 @@ const SearchBar: React.FC<SearchBarProps> = ({
       </button>
       <button 
         onClick={toggleRadar}
-        className={`px-8 py-4 rounded-[2rem] text-xs font-black uppercase tracking-widest transition-all ${isNearbyMode ? 'bg-red-500 text-white' : 'bg-stone-900 text-white'}`}
+        className={`px-8 py-4 rounded-[2rem] text-xs font-black uppercase tracking-widest transition-all ${isNearbyMode ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-stone-900 text-white'}`}
       >
-        <i className="fas fa-crosshairs mr-2"></i>
-        {isNearbyMode ? 'Radar Aan' : 'Radar'}
+        <i className={`fas ${isNearbyMode ? 'fa-sync-alt animate-spin' : 'fa-crosshairs'} mr-2`}></i>
+        {isNearbyMode ? 'Radar Actief' : 'Radar'}
       </button>
     </div>
   </div>
@@ -78,40 +78,30 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      const locationContext = query ? `in de buurt van ${query}` : `rondom de coördinaten ${lat}, ${lng}`;
-      const prompt = `Zoek minimaal 15 beeldenparken en land-art locaties ${locationContext}. Reageer alleen met de gevraagde JSON.`;
+      const locationPrompt = query || (lat && lng ? `de coördinaten ${lat}, ${lng}` : "Europa");
+      const prompt = `Geef 15 beeldenparken in ${locationPrompt}. Geef alleen JSON.`;
       
       const res = await askGemini(prompt, []);
       
       if (res.text === "ERROR") {
-        setError(res.error || "De AI-service kon niet worden gestart. Controleer of de API_KEY correct is ingesteld.");
+        setError(res.error || "De AI-sleutel kon niet worden geverifieerd.");
         return;
       }
 
-      let data;
-      try {
-        data = JSON.parse(res.text);
-      } catch (parseError) {
-        console.error("JSON Parse Error:", res.text);
-        setError("De AI gaf geen geldig resultaat terug. Probeer het opnieuw.");
-        return;
-      }
+      const data = JSON.parse(res.text);
 
-      if (data && data.parks && Array.isArray(data.parks)) {
-        const results = data.parks.map((p: any) => ({ 
-          ...p, 
-          id: `ai-${Math.random().toString(36).substr(2, 9)}`, 
+      if (data && data.parks) {
+        setAiParks(data.parks.map((p: any) => ({
+          ...p,
+          id: `park-${Math.random().toString(36).substr(2, 5)}`,
           isAiDiscovered: true,
-          lat: parseFloat(p.lat) || 0,
-          lng: parseFloat(p.lng) || 0
-        }));
-        setAiParks(results);
-        setCuratorText(data.curatorVibe || 'Ik heb de volgende locaties voor je gevonden.');
-      } else {
-        setError("Er zijn geen specifieke beeldenparken gevonden voor deze zoekopdracht.");
+          lat: Number(p.lat),
+          lng: Number(p.lng)
+        })));
+        setCuratorText(data.curatorVibe || "");
       }
     } catch (e: any) {
-      setError("Er is een probleem opgetreden bij het laden van de kunst: " + e.message);
+      setError("Er ging iets mis bij het verwerken van de kunstlocaties: " + e.message);
     } finally {
       setIsAiLoading(false);
     }
@@ -119,23 +109,19 @@ const App: React.FC = () => {
 
   const toggleRadar = useCallback(() => {
     if (!isNearbyMode) {
-      if (!navigator.geolocation) {
-        alert("Geolocatie wordt niet ondersteund.");
-        return;
-      }
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setUserLocation(loc);
-        setIsNearbyMode(true);
-        performSearch("", loc.lat, loc.lng);
-      }, (err) => {
-        alert("Locatie-toegang geweigerd. Zoek handmatig op een stad.");
-      });
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+          setUserLocation(loc);
+          setIsNearbyMode(true);
+          performSearch("", loc.lat, loc.lng);
+        },
+        () => alert("Zet je GPS aan voor de radarfunctie.")
+      );
     } else {
       setIsNearbyMode(false);
       setUserLocation(null);
       setAiParks([]);
-      setCuratorText('');
       setHasSearched(false);
     }
   }, [isNearbyMode, performSearch]);
@@ -152,10 +138,10 @@ const App: React.FC = () => {
       <header className="bg-white/80 backdrop-blur-md border-b border-stone-100 px-6 py-4 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.location.reload()}>
-            <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center text-white">
-              <i className="fas fa-radar"></i>
+            <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center text-white shadow-lg">
+              <i className="fas fa-compass"></i>
             </div>
-            <h1 className="text-2xl font-bold text-stone-900 serif">Sculptuur<span className="text-blue-600 italic">Radar</span></h1>
+            <h1 className="text-2xl font-bold text-stone-900 serif tracking-tight">Sculptuur<span className="text-blue-600 italic">Radar</span></h1>
           </div>
           {(hasSearched || isNearbyMode) && (
             <div className="w-full max-w-xl">
@@ -168,40 +154,36 @@ const App: React.FC = () => {
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-12">
         {!hasSearched && !isNearbyMode ? (
           <div className="text-center py-24 max-w-2xl mx-auto">
-            <h2 className="text-5xl font-bold text-stone-900 serif mb-6 animate-in fade-in zoom-in duration-700">Ontdek kunst in de open lucht.</h2>
-            <p className="text-stone-500 mb-10 text-lg italic animate-in fade-in slide-in-from-bottom-4 duration-1000">Scan elke regio voor beeldenparken en land-art.</p>
+            <div className="inline-block px-4 py-1.5 mb-6 rounded-full bg-blue-50 border border-blue-100 text-blue-600 text-[10px] font-black uppercase tracking-[0.2em]">
+              Powered by Gemini 3 Pro
+            </div>
+            <h2 className="text-6xl font-bold text-stone-900 serif mb-6 leading-[1.1]">Ontdek kunst in de <span className="italic text-blue-600">buitenlucht.</span></h2>
+            <p className="text-stone-500 mb-12 text-xl font-light leading-relaxed">Scan steden of gebruik de radar voor beeldenparken in jouw omgeving.</p>
             <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleSearchTrigger={() => performSearch(searchTerm)} toggleRadar={toggleRadar} isAiLoading={isAiLoading} isNearbyMode={isNearbyMode} />
           </div>
         ) : (
-          <>
+          <div className="animate-in fade-in duration-500">
             {error && (
-              <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 shadow-sm flex items-start gap-4 animate-in fade-in slide-in-from-top-4">
-                <i className="fas fa-key text-amber-500 mt-1"></i>
+              <div className="mb-8 p-6 bg-red-50 border border-red-100 rounded-3xl text-red-900 flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center text-red-600 flex-shrink-0">
+                  <i className="fas fa-exclamation-circle"></i>
+                </div>
                 <div>
-                  <p className="text-sm font-bold uppercase tracking-tight mb-1">Configuratie-opmerking</p>
-                  <p className="text-sm opacity-80">{error}</p>
+                  <p className="font-bold text-sm">Systeemfout</p>
+                  <p className="text-sm opacity-70">{error}</p>
                 </div>
               </div>
             )}
 
             {curatorText && !isAiLoading && !error && (
-              <div className="mb-10 p-8 bg-white border border-stone-100 rounded-3xl shadow-sm border-l-4 border-l-blue-600">
-                <p className="text-stone-800 text-lg italic serif leading-relaxed">
-                  <i className="fas fa-quote-left text-blue-100 mr-3 text-2xl"></i>
+              <div className="mb-10 p-10 bg-white border border-stone-100 rounded-[2.5rem] shadow-sm relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-2 h-full bg-blue-600"></div>
+                <p className="text-stone-800 text-xl italic serif leading-relaxed relative z-10">
                   {curatorText}
                 </p>
+                <i className="fas fa-quote-right absolute bottom-4 right-8 text-stone-50 text-8xl -z-0"></i>
               </div>
             )}
-
-            <div className="mb-8 flex justify-between items-end">
-              {!error && (
-                <div>
-                  <h2 className="text-3xl font-bold text-stone-900 serif">
-                    {isAiLoading ? 'De radar scant...' : `${sortedParks.length} Locaties gevonden`}
-                  </h2>
-                </div>
-              )}
-            </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {!isAiLoading && sortedParks.map(park => (
@@ -209,13 +191,25 @@ const App: React.FC = () => {
               ))}
               
               {isAiLoading && (
-                 <div className="col-span-full py-20 text-center">
-                    <div className="w-12 h-12 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin mx-auto mb-6"></div>
-                    <p className="text-stone-500 font-medium serif text-xl italic">Bezig met scannen van de regio...</p>
+                 <div className="col-span-full py-32 text-center">
+                    <div className="relative inline-block">
+                      <div className="w-20 h-20 border-4 border-blue-100 border-t-blue-600 rounded-full animate-spin"></div>
+                      <div className="absolute inset-0 flex items-center justify-center">
+                        <i className="fas fa-satellite text-blue-600 animate-pulse"></i>
+                      </div>
+                    </div>
+                    <p className="mt-8 text-stone-400 font-medium serif text-2xl italic">Radar scant Europa...</p>
                  </div>
               )}
             </div>
-          </>
+            
+            {!isAiLoading && sortedParks.length === 0 && !error && (
+              <div className="text-center py-20 text-stone-400">
+                <i className="fas fa-map-marked-alt text-4xl mb-4 opacity-20"></i>
+                <p>Geen locaties gevonden. Probeer een andere stad.</p>
+              </div>
+            )}
+          </div>
         )}
       </main>
       {selectedPark && <ParkDetail park={selectedPark} onClose={() => setSelectedPark(null)} />}
