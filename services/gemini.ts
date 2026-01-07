@@ -3,17 +3,17 @@ import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { ChatMessage } from "../types";
 
 export async function askGemini(prompt: string, history: ChatMessage[]) {
-  // In Vercel frontend omgevingen wordt de key geïnjecteerd.
-  // We halen hem hier direct op bij elke aanroep om race conditions te voorkomen.
-  const apiKey = process.env.API_KEY;
+  // In een Vite/Vercel omgeving kan process.env soms leeg lijken in de browser.
+  // We proberen zowel de standaard process.env als eventuele globale injecties.
+  const apiKey = (import.meta as any).env?.VITE_API_KEY || (process as any).env?.API_KEY;
 
   if (!apiKey) {
-    console.error("DEBUG: API_KEY is undefined in process.env");
+    console.error("CRITISCH: API_KEY niet gevonden in de browser omgeving.");
+    // We geven een specifieke error terug die App.tsx kan herkennen
     return { text: "FOUT_SLEUTEL_ONTBREEKT", sources: [] };
   }
 
   try {
-    // Maak een nieuwe instantie aan voor de meest actuele key-status
     const ai = new GoogleGenAI({ apiKey });
     const modelToUse = 'gemini-3-flash-preview';
 
@@ -28,15 +28,15 @@ export async function askGemini(prompt: string, history: ChatMessage[]) {
     });
 
     if (!response.text) {
-      throw new Error("Lege response van Gemini");
+      throw new Error("Geen tekst ontvangen van model");
     }
 
     return { text: response.text, sources: [] };
   } catch (error: any) {
-    console.error("Gemini API Error Detail:", error);
+    console.error("Gemini API Error:", error);
     
-    // Specifieke check op 403/401 errors die duiden op key issues
-    if (error.message?.includes("API_KEY_INVALID") || error.message?.includes("403") || error.message?.includes("401")) {
+    // Als de API zelf zegt dat de key fout is
+    if (error.message?.includes("API key not found") || error.message?.includes("403") || error.message?.includes("401")) {
       return { text: "FOUT_SLEUTEL_ONTBREEKT", sources: [] };
     }
     

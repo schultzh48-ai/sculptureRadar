@@ -98,7 +98,7 @@ const App: React.FC = () => {
         }));
 
         if (lat && lng) {
-          results = results.filter((p: any) => getDistance(lat, lng, p.lat, p.lng) <= 100); // iets ruimer voor de radar
+          results = results.filter((p: any) => getDistance(lat, lng, p.lat, p.lng) <= 120);
         }
         setAiParks(results);
         setCuratorText(data.curatorVibe || '');
@@ -165,11 +165,15 @@ const App: React.FC = () => {
         ) : (
           <>
             {status === 'error_key' && (
-              <div className="mb-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-red-900 shadow-sm flex items-start gap-4">
-                <i className="fas fa-key mt-1 text-red-400"></i>
+              <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 shadow-sm flex items-start gap-4">
+                <i className="fas fa-wrench mt-1 text-amber-500"></i>
                 <div>
-                  <h3 className="font-black uppercase tracking-tight text-sm">Configuratie vereist</h3>
-                  <p className="text-sm opacity-90 leading-relaxed">De API_KEY in Vercel lijkt nog niet actief of is onjuist. Herlaad de pagina over een minuutje of controleer of de key exact 'API_KEY' heet in je settings.</p>
+                  <h3 className="font-black uppercase tracking-tight text-sm">Configuratie-opmerking</h3>
+                  <p className="text-sm opacity-90 leading-relaxed">
+                    De API-sleutel wordt niet herkend door de browser. 
+                    <strong>Tip:</strong> Hernoem de variabele in Vercel van <code>API_KEY</code> naar <code>VITE_API_KEY</code> en her-deploy de app. 
+                    Vite staat standaard geen toegang tot variabelen toe zonder die prefix in de frontend.
+                  </p>
                 </div>
               </div>
             )}
@@ -186,9 +190,9 @@ const App: React.FC = () => {
             <div className="mb-8 flex justify-between items-end">
               <div>
                 <h2 className="text-3xl font-bold text-stone-900 serif">
-                  {isAiLoading ? 'De radar scant de horizon...' : `${sortedParks.length} Parels gevonden`}
+                  {isAiLoading ? 'De radar scant de horizon...' : `${sortedParks.length} Locaties gevonden`}
                 </h2>
-                <p className="text-stone-400 text-[10px] mt-1 uppercase tracking-widest font-black">Bereik: ~50-100 km</p>
+                <p className="text-stone-400 text-[10px] mt-1 uppercase tracking-widest font-black">Powered by Gemini AI</p>
               </div>
             </div>
 
@@ -199,14 +203,14 @@ const App: React.FC = () => {
               {isAiLoading && (
                  <div className="col-span-full py-20 text-center">
                     <div className="w-12 h-12 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin mx-auto mb-6"></div>
-                    <p className="text-stone-500 font-medium serif text-xl italic">Curator stelt een unieke lijst samen...</p>
+                    <p className="text-stone-500 font-medium serif text-xl italic">De curator zoekt wereldwijd naar kunstlocaties...</p>
                  </div>
               )}
             </div>
 
             {!isAiLoading && sortedParks.length === 0 && status === 'idle' && (
               <div className="text-center py-20 bg-stone-50 rounded-3xl border border-dashed border-stone-200">
-                <p className="text-stone-400 italic serif text-lg">Geen locaties gevonden in deze regio.</p>
+                <p className="text-stone-400 italic serif text-lg">Geen locaties gevonden. Probeer een andere zoekterm.</p>
               </div>
             )}
           </>
