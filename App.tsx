@@ -78,25 +78,43 @@ const App: React.FC = () => {
     setError(null);
 
     try {
-      const prompt = `Lijst minimaal 15 beeldenparken binnen 75 km van ${query || lat + ',' + lng}. Geef JSON object met 'curatorVibe' (max 2 zinnen tekst) en 'parks' (array met name, location, shortDescription, website, lat, lng).`;
+      const locationContext = query ? `in de buurt van ${query}` : `rondom coördinaten ${lat},${lng}`;
+      const prompt = `Lijst minimaal 15 beeldenparken en land-art locaties ${locationContext}. Geef een JSON object terug.`;
+      
       const res = await askGemini(prompt, []);
       
       if (res.text === "ERROR") {
-        setError("Er ging iets mis bij het ophalen van de kunstlocaties. Probeer het opnieuw.");
+        setError("De AI-service is momenteel niet bereikbaar. Controleer je internetverbinding of API-sleutel.");
         return;
       }
 
-      const data = JSON.parse(res.text);
-      if (data.parks) {
+      // Probeer de JSON te parsen
+      let data;
+      try {
+        data = JSON.parse(res.text);
+      } catch (parseError) {
+        console.error("JSON Parse Error:", res.text);
+        setError("Het antwoord van de AI kon niet worden gelezen. Probeer het nog eens.");
+        return;
+      }
+
+      if (data && data.parks && Array.isArray(data.parks)) {
         const results = data.parks.map((p: any) => ({ 
-          ...p, id: `ai-${Math.random()}`, isAiDiscovered: true 
+          ...p, 
+          id: `ai-${Math.random().toString(36).substr(2, 9)}`, 
+          isAiDiscovered: true,
+          // Zorg dat lat/lng nummers zijn
+          lat: parseFloat(p.lat) || 0,
+          lng: parseFloat(p.lng) || 0
         }));
         setAiParks(results);
-        setCuratorText(data.curatorVibe || '');
+        setCuratorText(data.curatorVibe || 'Ik heb de volgende locaties voor je gevonden.');
+      } else {
+        setError("Geen locaties gevonden in deze regio.");
       }
-    } catch (e) {
-      console.error(e);
-      setError("Fout bij het verwerken van de gegevens.");
+    } catch (e: any) {
+      console.error("General Error:", e);
+      setError("Er is een onverwachte fout opgetreden: " + e.message);
     } finally {
       setIsAiLoading(false);
     }
@@ -104,12 +122,19 @@ const App: React.FC = () => {
 
   const toggleRadar = useCallback(() => {
     if (!isNearbyMode) {
+      if (!navigator.geolocation) {
+        alert("Geolocatie wordt niet ondersteund door deze browser.");
+        return;
+      }
       navigator.geolocation.getCurrentPosition((pos) => {
         const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
         setUserLocation(loc);
         setIsNearbyMode(true);
         performSearch("", loc.lat, loc.lng);
-      }, () => alert("GPS toegang is nodig voor de radar."));
+      }, (err) => {
+        alert("Kan je locatie niet ophalen. Controleer je privacy-instellingen.");
+        console.error(err);
+      });
     } else {
       setIsNearbyMode(false);
       setUserLocation(null);
@@ -154,13 +179,16 @@ const App: React.FC = () => {
         ) : (
           <>
             {error && (
-              <div className="mb-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-red-900 shadow-sm flex items-center gap-4">
-                <i className="fas fa-exclamation-circle text-red-500"></i>
-                <p className="text-sm font-medium">{error}</p>
+              <div className="mb-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-red-900 shadow-sm flex items-start gap-4 animate-in fade-in slide-in-from-top-4 duration-300">
+                <i className="fas fa-exclamation-triangle text-red-500 mt-1"></i>
+                <div>
+                  <p className="text-sm font-bold uppercase tracking-tight mb-1">Oeps!</p>
+                  <p className="text-sm opacity-80">{error}</p>
+                </div>
               </div>
             )}
 
-            {curatorText && !isAiLoading && (
+            {curatorText && !isAiLoading && !error && (
               <div className="mb-10 p-8 bg-white border border-stone-100 rounded-3xl shadow-sm border-l-4 border-l-blue-600">
                 <p className="text-stone-800 text-lg italic serif leading-relaxed">
                   <i className="fas fa-quote-left text-blue-100 mr-3 text-2xl"></i>
@@ -170,21 +198,24 @@ const App: React.FC = () => {
             )}
 
             <div className="mb-8 flex justify-between items-end">
-              <div>
-                <h2 className="text-3xl font-bold text-stone-900 serif">
-                  {isAiLoading ? 'De radar scant...' : `${sortedParks.length} Locaties gevonden`}
-                </h2>
-              </div>
+              {!error && (
+                <div>
+                  <h2 className="text-3xl font-bold text-stone-900 serif">
+                    {isAiLoading ? 'De radar scant...' : `${sortedParks.length} Locaties gevonden`}
+                  </h2>
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {sortedParks.map(park => (
+              {!isAiLoading && sortedParks.map(park => (
                 <ParkCard key={park.id} park={park} onClick={setSelectedPark} />
               ))}
+              
               {isAiLoading && (
                  <div className="col-span-full py-20 text-center">
                     <div className="w-12 h-12 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin mx-auto mb-6"></div>
-                    <p className="text-stone-500 font-medium serif text-xl italic">Bezig met scannen...</p>
+                    <p className="text-stone-500 font-medium serif text-xl italic">Bezig met scannen van de regio...</p>
                  </div>
               )}
             </div>
