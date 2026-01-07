@@ -68,26 +68,21 @@ const App: React.FC = () => {
   const [userLocation, setUserLocation] = useState<{lat: number, lng: number} | null>(null);
   const [isNearbyMode, setIsNearbyMode] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
-  const [status, setStatus] = useState<'idle' | 'error_key' | 'error_api'>('idle');
+  const [error, setError] = useState<string | null>(null);
 
   const performSearch = useCallback(async (query: string, lat?: number, lng?: number) => {
     setAiParks([]);
     setCuratorText('');
     setHasSearched(true);
     setIsAiLoading(true);
-    setStatus('idle');
+    setError(null);
 
     try {
       const prompt = `Lijst minimaal 15 beeldenparken binnen 75 km van ${query || lat + ',' + lng}. Geef JSON object met 'curatorVibe' (max 2 zinnen tekst) en 'parks' (array met name, location, shortDescription, website, lat, lng).`;
       const res = await askGemini(prompt, []);
       
-      if (res.text === "FOUT_SLEUTEL_ONTBREEKT") {
-        setStatus('error_key');
-        return;
-      }
-      
       if (res.text === "ERROR") {
-        setStatus('error_api');
+        setError("Er ging iets mis bij het ophalen van de kunstlocaties. Probeer het opnieuw.");
         return;
       }
 
@@ -101,7 +96,7 @@ const App: React.FC = () => {
       }
     } catch (e) {
       console.error(e);
-      setStatus('error_api');
+      setError("Fout bij het verwerken van de gegevens.");
     } finally {
       setIsAiLoading(false);
     }
@@ -158,9 +153,10 @@ const App: React.FC = () => {
           </div>
         ) : (
           <>
-            {status === 'error_key' && (
-              <div className="mb-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-red-900">
-                Er is een configuratiefout met de API sleutel.
+            {error && (
+              <div className="mb-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-red-900 shadow-sm flex items-center gap-4">
+                <i className="fas fa-exclamation-circle text-red-500"></i>
+                <p className="text-sm font-medium">{error}</p>
               </div>
             )}
 
@@ -176,7 +172,7 @@ const App: React.FC = () => {
             <div className="mb-8 flex justify-between items-end">
               <div>
                 <h2 className="text-3xl font-bold text-stone-900 serif">
-                  {isAiLoading ? 'De radar scant...' : `${sortedParks.length} Locaties`}
+                  {isAiLoading ? 'De radar scant...' : `${sortedParks.length} Locaties gevonden`}
                 </h2>
               </div>
             </div>
@@ -188,7 +184,7 @@ const App: React.FC = () => {
               {isAiLoading && (
                  <div className="col-span-full py-20 text-center">
                     <div className="w-12 h-12 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin mx-auto mb-6"></div>
-                    <p className="text-stone-500 italic">Zoeken...</p>
+                    <p className="text-stone-500 font-medium serif text-xl italic">Bezig met scannen...</p>
                  </div>
               )}
             </div>
