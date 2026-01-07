@@ -78,7 +78,7 @@ const App: React.FC = () => {
     setStatus('idle');
 
     try {
-      const prompt = `Lijst minimaal 15 beeldenparken en openlucht kunstlocaties binnen 50 km van ${query || lat + ',' + lng}. Geef JSON object met 'curatorVibe' (max 2 zinnen tekst) en 'parks' (array met name, location, shortDescription, website, lat, lng).`;
+      const prompt = `Lijst minimaal 15 beeldenparken binnen 50 km van ${query || lat + ',' + lng}. Geef JSON object met 'curatorVibe' (max 2 zinnen tekst) en 'parks' (array met name, location, shortDescription, website, lat, lng).`;
       const res = await askGemini(prompt, []);
       
       if (res.text === "FOUT_SLEUTEL_ONTBREEKT") {
@@ -86,6 +86,11 @@ const App: React.FC = () => {
         return;
       }
       
+      if (res.text === "ERROR") {
+        setStatus('error_api');
+        return;
+      }
+
       const data = JSON.parse(res.text);
       if (data.parks) {
         let results = data.parks.map((p: any) => ({ 
@@ -93,7 +98,7 @@ const App: React.FC = () => {
         }));
 
         if (lat && lng) {
-          results = results.filter((p: any) => getDistance(lat, lng, p.lat, p.lng) <= 75);
+          results = results.filter((p: any) => getDistance(lat, lng, p.lat, p.lng) <= 100); // iets ruimer voor de radar
         }
         setAiParks(results);
         setCuratorText(data.curatorVibe || '');
@@ -115,7 +120,7 @@ const App: React.FC = () => {
         setUserLocation(loc);
         setIsNearbyMode(true);
         performSearch("", loc.lat, loc.lng);
-      }, () => alert("GPS toegang is nodig voor de radar functie."));
+      }, () => alert("GPS toegang is nodig voor de radar."));
     } else {
       setIsNearbyMode(false);
       setUserLocation(null);
@@ -160,11 +165,11 @@ const App: React.FC = () => {
         ) : (
           <>
             {status === 'error_key' && (
-              <div className="mb-8 p-6 bg-red-50 border border-red-100 rounded-2xl text-red-800 shadow-sm flex items-center gap-4">
-                <i className="fas fa-exclamation-triangle text-2xl"></i>
+              <div className="mb-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-red-900 shadow-sm flex items-start gap-4">
+                <i className="fas fa-key mt-1 text-red-400"></i>
                 <div>
-                  <h3 className="font-bold">Configuratie Fout</h3>
-                  <p className="text-sm opacity-80">De API-sleutel kon niet worden geladen. Controleer of 'API_KEY' correct is ingesteld in je omgevingsvariabelen.</p>
+                  <h3 className="font-black uppercase tracking-tight text-sm">Configuratie vereist</h3>
+                  <p className="text-sm opacity-90 leading-relaxed">De API_KEY in Vercel lijkt nog niet actief of is onjuist. Herlaad de pagina over een minuutje of controleer of de key exact 'API_KEY' heet in je settings.</p>
                 </div>
               </div>
             )}
@@ -181,9 +186,9 @@ const App: React.FC = () => {
             <div className="mb-8 flex justify-between items-end">
               <div>
                 <h2 className="text-3xl font-bold text-stone-900 serif">
-                  {isAiLoading ? 'De radar scant de regio...' : `${sortedParks.length} Locaties gevonden`}
+                  {isAiLoading ? 'De radar scant de horizon...' : `${sortedParks.length} Parels gevonden`}
                 </h2>
-                <p className="text-stone-400 text-xs mt-1 uppercase tracking-widest font-bold">Bereik: ~50-75 km</p>
+                <p className="text-stone-400 text-[10px] mt-1 uppercase tracking-widest font-black">Bereik: ~50-100 km</p>
               </div>
             </div>
 
@@ -194,14 +199,14 @@ const App: React.FC = () => {
               {isAiLoading && (
                  <div className="col-span-full py-20 text-center">
                     <div className="w-12 h-12 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin mx-auto mb-6"></div>
-                    <p className="text-stone-500 font-medium serif text-xl italic">De curator stelt een unieke lijst samen...</p>
+                    <p className="text-stone-500 font-medium serif text-xl italic">Curator stelt een unieke lijst samen...</p>
                  </div>
               )}
             </div>
 
             {!isAiLoading && sortedParks.length === 0 && status === 'idle' && (
               <div className="text-center py-20 bg-stone-50 rounded-3xl border border-dashed border-stone-200">
-                <p className="text-stone-400 italic serif text-lg">Geen locaties gevonden in deze regio. Probeer een andere stad of zoom uit.</p>
+                <p className="text-stone-400 italic serif text-lg">Geen locaties gevonden in deze regio.</p>
               </div>
             )}
           </>
