@@ -78,7 +78,7 @@ const App: React.FC = () => {
     setStatus('idle');
 
     try {
-      const prompt = `Lijst minimaal 15 beeldenparken binnen 50 km van ${query || lat + ',' + lng}. Geef JSON object met 'curatorVibe' (max 2 zinnen tekst) en 'parks' (array met name, location, shortDescription, website, lat, lng).`;
+      const prompt = `Lijst minimaal 15 beeldenparken binnen 75 km van ${query || lat + ',' + lng}. Geef JSON object met 'curatorVibe' (max 2 zinnen tekst) en 'parks' (array met name, location, shortDescription, website, lat, lng).`;
       const res = await askGemini(prompt, []);
       
       if (res.text === "FOUT_SLEUTEL_ONTBREEKT") {
@@ -93,17 +93,11 @@ const App: React.FC = () => {
 
       const data = JSON.parse(res.text);
       if (data.parks) {
-        let results = data.parks.map((p: any) => ({ 
+        const results = data.parks.map((p: any) => ({ 
           ...p, id: `ai-${Math.random()}`, isAiDiscovered: true 
         }));
-
-        if (lat && lng) {
-          results = results.filter((p: any) => getDistance(lat, lng, p.lat, p.lng) <= 120);
-        }
         setAiParks(results);
         setCuratorText(data.curatorVibe || '');
-      } else {
-        setStatus('error_api');
       }
     } catch (e) {
       console.error(e);
@@ -165,16 +159,8 @@ const App: React.FC = () => {
         ) : (
           <>
             {status === 'error_key' && (
-              <div className="mb-8 p-6 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 shadow-sm flex items-start gap-4">
-                <i className="fas fa-wrench mt-1 text-amber-500"></i>
-                <div>
-                  <h3 className="font-black uppercase tracking-tight text-sm">Configuratie-opmerking</h3>
-                  <p className="text-sm opacity-90 leading-relaxed">
-                    De API-sleutel wordt niet herkend door de browser. 
-                    <strong>Tip:</strong> Hernoem de variabele in Vercel van <code>API_KEY</code> naar <code>VITE_API_KEY</code> en her-deploy de app. 
-                    Vite staat standaard geen toegang tot variabelen toe zonder die prefix in de frontend.
-                  </p>
-                </div>
+              <div className="mb-8 p-6 bg-red-50 border border-red-200 rounded-2xl text-red-900">
+                Er is een configuratiefout met de API sleutel.
               </div>
             )}
 
@@ -190,9 +176,8 @@ const App: React.FC = () => {
             <div className="mb-8 flex justify-between items-end">
               <div>
                 <h2 className="text-3xl font-bold text-stone-900 serif">
-                  {isAiLoading ? 'De radar scant de horizon...' : `${sortedParks.length} Locaties gevonden`}
+                  {isAiLoading ? 'De radar scant...' : `${sortedParks.length} Locaties`}
                 </h2>
-                <p className="text-stone-400 text-[10px] mt-1 uppercase tracking-widest font-black">Powered by Gemini AI</p>
               </div>
             </div>
 
@@ -203,16 +188,10 @@ const App: React.FC = () => {
               {isAiLoading && (
                  <div className="col-span-full py-20 text-center">
                     <div className="w-12 h-12 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin mx-auto mb-6"></div>
-                    <p className="text-stone-500 font-medium serif text-xl italic">De curator zoekt wereldwijd naar kunstlocaties...</p>
+                    <p className="text-stone-500 italic">Zoeken...</p>
                  </div>
               )}
             </div>
-
-            {!isAiLoading && sortedParks.length === 0 && status === 'idle' && (
-              <div className="text-center py-20 bg-stone-50 rounded-3xl border border-dashed border-stone-200">
-                <p className="text-stone-400 italic serif text-lg">Geen locaties gevonden. Probeer een andere zoekterm.</p>
-              </div>
-            )}
           </>
         )}
       </main>
