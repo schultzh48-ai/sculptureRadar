@@ -36,12 +36,6 @@ const SearchBar: React.FC<SearchBarProps> = ({
   isNearbyMode, 
   className = "" 
 }) => {
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSearchTrigger();
-    }
-  };
-
   return (
     <div className={`flex flex-col md:flex-row gap-2 bg-white p-2 rounded-[2.5rem] border border-stone-200 shadow-sm focus-within:border-blue-500 transition-all ${className}`}>
       <div className="relative flex-1 flex items-center">
@@ -51,7 +45,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
           placeholder="Zoek stad of park..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          onKeyDown={handleKeyDown}
+          onKeyDown={(e) => e.key === 'Enter' && handleSearchTrigger()}
           className="w-full bg-transparent pl-14 pr-6 py-4 rounded-2xl text-lg outline-none font-medium placeholder:text-stone-300"
         />
       </div>
@@ -61,7 +55,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
           disabled={searchTerm.trim().length < 2 || isAiLoading}
           className="bg-blue-600 text-white px-8 py-4 rounded-[2rem] text-xs font-black uppercase tracking-widest hover:bg-blue-700 disabled:opacity-30 transition-all active:scale-95"
         >
-          {isAiLoading ? <i className="fas fa-circle-notch animate-spin mr-2"></i> : <i className="fas fa-search mr-2"></i>}
+          {isAiLoading ? <i className="fas fa-circle-notch animate-spin"></i> : <i className="fas fa-search mr-2"></i>}
           Zoek
         </button>
         <button 
@@ -69,7 +63,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
           className={`px-8 py-4 rounded-[2rem] text-xs font-black uppercase tracking-widest transition-all ${isNearbyMode ? 'bg-red-500 text-white shadow-lg shadow-red-200' : 'bg-stone-900 text-white'}`}
         >
           <i className="fas fa-crosshairs mr-2"></i>
-          Radar
+          {isNearbyMode ? 'Radar Aan' : 'Radar'}
         </button>
       </div>
     </div>
@@ -112,95 +106,71 @@ const App: React.FC = () => {
   const [regionVibe, setRegionVibe] = useState<string>("");
   const [isVibeLoading, setIsVibeLoading] = useState(false);
 
-  const fetchRegionVibe = async (queryOrCoords: string) => {
-    setIsVibeLoading(true);
-    setRegionVibe("");
-    try {
-      const prompt = `Vertel als onze Hoofdcurator een inspirerend verhaal over de beeldenparken in "${queryOrCoords}". Wat maakt deze regio artistiek uniek? Schrijf minimaal 100 woorden.`;
-      const { text } = await askGemini(prompt, []);
-      setRegionVibe(text || "Een regio waar kunst en natuur een unieke dialoog aangaan.");
-    } catch (e) {
-      setRegionVibe("Er is een fout opgetreden bij het ophalen van de curator-tekst.");
-    } finally {
-      setIsVibeLoading(false);
-    }
-  };
-
   const performDeepSearch = useCallback(async (query: string, lat?: number, lng?: number) => {
-    const finalQuery = query.trim();
-    if (!finalQuery && !lat) return;
-    
+    setAiParks([]);
+    setRegionVibe("");
     setHasSearched(true);
     setIsAiLoading(true);
     
-    // Lokale filter direct toepassen
+    // Stap 1: Filter statische lijst (strengere 25km filter voor betere initiële resultaten)
     const initialResults = INITIAL_PARKS.filter(p => {
-      if (finalQuery) {
-        return p.location.toLowerCase().includes(finalQuery.toLowerCase()) || 
-               p.name.toLowerCase().includes(finalQuery.toLowerCase());
-      }
-      if (lat && lng) {
-        return getDistance(lat, lng, p.lat, p.lng) <= 150;
-      }
-      return false;
+      if (lat && lng) return getDistance(lat, lng, p.lat, p.lng) <= 25;
+      return query && (p.location.toLowerCase().includes(query.toLowerCase()) || p.name.toLowerCase().includes(query.toLowerCase()));
     });
     setAiParks(initialResults);
 
-    fetchRegionVibe(finalQuery || `omgeving ${lat},${lng}`);
-
+    // Stap 2: Vibe ophalen
+    setIsVibeLoading(true);
     try {
-      const searchPrompt = `Zoek via Google Search naar bekende beeldenparken en beeldentuinen in "${finalQuery || 'lat ' + lat + ', lng ' + lng}". Geef resultaten uitsluitend als JSON array met velden: name, location, shortDescription, website, lat, lng.`;
-      const { text } = await askGemini(searchPrompt, []);
+      const { text } = await askGemini(`Vertel als Hoofdcurator kort en krachtig over de sfeer van beeldenparken en kunst in de open lucht in de regio ${query || 'waar ik nu ben'}. Focus op wat deze specifieke plek artistiek interessant maakt.`, []);
+      setRegionVibe(text || "");
+    } catch (e) {
+      console.error("Vibe error", e);
+    } finally {
+      setIsVibeLoading(false);
+    }
+
+    // Stap 3: Deep Search via AI (Verruimde zoekopdracht)
+    try {
+      // We vragen de AI om verder te kijken als er dichtbij niets is, tot 50-75km.
+      const prompt = `Zoek ALLES wat met beeldenparken, beeldentuinen, openluchtmusea of grote publieke kunstinstallaties te maken heeft nabij ${query || lat + ',' + lng}. Zoek eerst binnen 15km, maar breid uit naar 60km als er weinig resultaten zijn. Wees specifiek en zoek ook naar kleinere, minder bekende plekken. Return uitsluitend een JSON array met: name, location, shortDescription, website, lat, lng.`;
       
-      if (text && text.length > 5) {
+      const { text } = await askGemini(prompt, []);
+      if (text) {
         try {
-          const discovered = JSON.parse(text).map((p: any) => ({ 
-            ...p, 
-            id: p.id || `ai-${Math.random().toString(36).substr(2, 9)}`,
-            isAiDiscovered: true 
-          }));
-          
+          const discovered = JSON.parse(text).map((p: any) => ({ ...p, id: `ai-${Math.random()}`, isAiDiscovered: true }));
           setAiParks(prev => {
-            const existingNames = new Set(prev.map(d => d.name.toLowerCase()));
-            const uniqueDiscovered = discovered.filter((p: any) => !existingNames.has(p.name.toLowerCase()));
-            return [...prev, ...uniqueDiscovered];
+            const names = new Set(prev.map(d => d.name.toLowerCase()));
+            // Voor AI resultaten hanteren we een ruimere filter van 75km om 'te weinig resultaten' te voorkomen
+            const valid = discovered.filter((p: any) => {
+              const isNew = !names.has(p.name.toLowerCase());
+              if (lat && lng && p.lat && p.lng) {
+                return isNew && getDistance(lat, lng, p.lat, p.lng) <= 75;
+              }
+              return isNew;
+            });
+            return [...prev, ...valid];
           });
-        } catch (e) {
-          console.error("AI parse error", e);
+        } catch (jsonErr) {
+          console.error("Invalid JSON from AI", jsonErr);
         }
       }
     } catch (e) {
-      console.error("AI search failed", e);
+      console.error("Deep search error", e);
     } finally {
       setIsAiLoading(false);
     }
   }, []);
 
-  const handleSearchTrigger = useCallback(() => {
-    const q = searchTerm.trim();
-    if (q.length >= 2) {
-      performDeepSearch(q);
-    }
-  }, [searchTerm, performDeepSearch]);
-
-  useEffect(() => {
-    if (isNearbyMode && userLocation) {
-      performDeepSearch("", userLocation.lat, userLocation.lng);
-    }
-  }, [isNearbyMode, userLocation, performDeepSearch]);
-
   const toggleRadar = useCallback(() => {
     if (!isNearbyMode) {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition((pos) => {
-          const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-          setUserLocation(loc);
-          setIsNearbyMode(true);
-          setSearchTerm('');
-        }, (err) => {
-          alert("GPS is nodig voor deze functie.");
-        });
-      }
+      navigator.geolocation.getCurrentPosition((pos) => {
+        const loc = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        setUserLocation(loc);
+        setIsNearbyMode(true);
+        setSearchTerm('');
+        performDeepSearch("", loc.lat, loc.lng);
+      }, () => alert("GPS nodig voor radar."));
     } else {
       setIsNearbyMode(false);
       setUserLocation(null);
@@ -208,39 +178,32 @@ const App: React.FC = () => {
       setHasSearched(false);
       setRegionVibe("");
     }
-  }, [isNearbyMode]);
+  }, [isNearbyMode, performDeepSearch]);
 
   const sortedParks = useMemo(() => {
-    return aiParks.map(p => {
-      let distance;
-      if (userLocation) {
-        distance = getDistance(userLocation.lat, userLocation.lng, p.lat, p.lng);
-      }
-      return { ...p, distance };
-    }).sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    return aiParks.map(p => ({
+      ...p,
+      distance: userLocation ? getDistance(userLocation.lat, userLocation.lng, p.lat, p.lng) : undefined
+    })).sort((a, b) => (a.distance || 0) - (b.distance || 0));
   }, [aiParks, userLocation]);
+
+  const handleSearchClick = () => {
+    if (searchTerm.trim().length >= 2) {
+      performDeepSearch(searchTerm);
+    }
+  };
 
   return (
     <div className="min-h-screen flex flex-col bg-[#fbfbf9]">
-      <header className="bg-white/80 backdrop-blur-md border-b border-stone-100 px-6 py-4 sticky top-0 z-30 shadow-sm">
+      <header className="bg-white/80 backdrop-blur-md border-b border-stone-100 px-6 py-4 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-3 cursor-pointer group" onClick={() => window.location.reload()}>
-            <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center text-white transition-transform group-hover:rotate-12">
-              <i className="fas fa-radar"></i>
-            </div>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.location.reload()}>
+            <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center text-white"><i className="fas fa-radar"></i></div>
             <h1 className="text-2xl font-bold text-stone-900 serif">Sculptuur<span className="text-blue-600 italic">Radar</span></h1>
           </div>
           {(hasSearched || isNearbyMode) && (
             <div className="w-full max-w-xl">
-              <SearchBar 
-                searchTerm={searchTerm}
-                setSearchTerm={setSearchTerm}
-                handleSearchTrigger={handleSearchTrigger}
-                toggleRadar={toggleRadar}
-                isAiLoading={isAiLoading}
-                isNearbyMode={isNearbyMode}
-                className="!py-1 !rounded-2xl !shadow-none !border-stone-100 bg-stone-50/50" 
-              />
+              <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleSearchTrigger={handleSearchClick} toggleRadar={toggleRadar} isAiLoading={isAiLoading} isNearbyMode={isNearbyMode} className="!py-1 !rounded-2xl !shadow-none !border-stone-100 bg-stone-50/50" />
             </div>
           )}
         </div>
@@ -249,80 +212,64 @@ const App: React.FC = () => {
       <main className="flex-1 max-w-7xl mx-auto w-full px-6 py-12">
         {!hasSearched && !isNearbyMode ? (
           <div className="text-center py-24 max-w-3xl mx-auto">
-            <div className="mb-12 flex justify-center">
-                <ModernRadarIcon active={false} />
-            </div>
-            <h2 className="text-6xl md:text-7xl font-bold text-stone-900 serif mb-8 tracking-tight">SculptuurRadar</h2>
-            <p className="text-stone-500 text-xl md:text-2xl mb-12 font-light leading-relaxed">Vind de mooiste beeldenparken in Europa via AI of GPS.</p>
-            <SearchBar 
-              searchTerm={searchTerm}
-              setSearchTerm={setSearchTerm}
-              handleSearchTrigger={handleSearchTrigger}
-              toggleRadar={toggleRadar}
-              isAiLoading={isAiLoading}
-              isNearbyMode={isNearbyMode}
-            />
+            <ModernRadarIcon active={false} />
+            <h2 className="text-6xl font-bold text-stone-900 serif mt-8 mb-8">SculptuurRadar</h2>
+            <p className="text-stone-500 text-xl mb-12">Ontdek beeldentuinen en kunstparken. De radar zoekt nu dieper en verder voor meer resultaten.</p>
+            <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleSearchTrigger={handleSearchClick} toggleRadar={toggleRadar} isAiLoading={isAiLoading} isNearbyMode={isNearbyMode} />
           </div>
         ) : (
           <>
-            <div className="flex justify-between items-end mb-12 border-b border-stone-200 pb-8">
+            <div className="mb-12 border-b border-stone-200 pb-8 flex flex-col md:flex-row md:items-end justify-between gap-4">
               <div>
-                <h2 className="text-[11px] uppercase tracking-[0.3em] font-black text-stone-400 mb-3 flex items-center gap-2">
-                  {isAiLoading ? (
-                    <><span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span> Zoeken in artistieke database...</>
-                  ) : 'Resultaten gevonden'}
+                <h2 className="text-[11px] uppercase tracking-widest font-black text-stone-400 mb-2">
+                  {isAiLoading ? 'De radar scant de wijde omgeving...' : 'Gevonden locaties'}
                 </h2>
-                <div className="text-4xl font-bold text-stone-900 serif">{sortedParks.length} Locaties</div>
+                <div className="text-4xl font-bold text-stone-900 serif">
+                  {isAiLoading && sortedParks.length === 0 ? 'Zoeken...' : `${sortedParks.length} Parels gevonden`}
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-[10px] font-bold text-stone-400 bg-stone-100 px-4 py-2 rounded-full">
+                <i className="fas fa-info-circle text-blue-500"></i>
+                <span>We tonen resultaten tot 75km voor een compleet overzicht</span>
               </div>
             </div>
 
             {(regionVibe || isVibeLoading) && (
-              <div className="mb-14 p-12 bg-white rounded-[2.5rem] border border-stone-100 shadow-sm relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-2 h-full bg-blue-600"></div>
-                <div className="flex flex-col md:flex-row items-start gap-12">
-                  <div className="flex-shrink-0">
-                    <ModernRadarIcon active={isVibeLoading} />
+              <div className="mb-12 p-10 bg-white rounded-3xl border border-stone-100 shadow-sm relative overflow-hidden transition-all">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
+                {isVibeLoading ? (
+                  <div className="animate-pulse space-y-3">
+                    <div className="h-4 bg-stone-100 rounded w-3/4"></div>
+                    <div className="h-4 bg-stone-100 rounded w-1/2"></div>
                   </div>
-                  <div className="flex-1">
-                    {isVibeLoading ? (
-                      <div className="space-y-4 max-w-2xl animate-pulse">
-                        <div className="w-full h-3 bg-stone-100 rounded-full"></div>
-                        <div className="w-5/6 h-3 bg-stone-100 rounded-full"></div>
-                        <div className="w-4/6 h-3 bg-stone-100 rounded-full"></div>
-                      </div>
-                    ) : (
-                      <div className="relative">
-                        <i className="fas fa-quote-left absolute -top-8 -left-8 text-6xl text-stone-50"></i>
-                        <p className="text-xl md:text-2xl text-stone-800 italic serif leading-relaxed font-medium">
-                          {regionVibe}
-                        </p>
-                        <div className="mt-8 flex items-center gap-4">
-                            <div className="w-12 h-[1px] bg-blue-600"></div>
-                            <span className="text-[12px] font-black uppercase tracking-[0.2em] text-blue-600">Hoofdcurator</span>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
+                ) : (
+                  <p className="text-xl text-stone-800 italic serif leading-relaxed">{regionVibe}</p>
+                )}
               </div>
             )}
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {sortedParks.map(park => (
-                <ParkCard key={park.id} park={park} onClick={(p) => setSelectedPark({ ...p, distance: p.distance })} />
+                <ParkCard key={park.id} park={park} onClick={setSelectedPark} />
               ))}
-              
               {isAiLoading && (
-                 <div className="col-span-1 border-2 border-dashed border-stone-100 rounded-3xl flex flex-col items-center justify-center p-8 bg-stone-50/50 min-h-[220px]">
-                    <div className="w-10 h-10 border-4 border-stone-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
-                    <span className="text-[10px] font-black uppercase tracking-widest text-stone-400 text-center">Live scan uitgevoerd...</span>
+                 <div className="border-2 border-dashed border-stone-100 rounded-3xl flex flex-col items-center justify-center p-8 bg-stone-50/50 min-h-[200px] animate-pulse">
+                    <div className="w-8 h-8 border-4 border-stone-200 border-t-blue-500 rounded-full animate-spin mb-4"></div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-stone-400">Radar verbreedt zoekveld...</span>
                  </div>
               )}
             </div>
+
+            {!isAiLoading && sortedParks.length === 0 && (
+              <div className="text-center py-20 bg-stone-50 rounded-3xl border border-dashed border-stone-200">
+                <i className="fas fa-search-minus text-4xl text-stone-200 mb-4"></i>
+                <p className="text-stone-400 font-medium italic serif text-lg">Zelfs met een brede scan zijn er geen parken gevonden.</p>
+                <p className="text-stone-400 text-sm mt-2">Probeer een andere regio of zoek op een specifieke stad.</p>
+              </div>
+            )}
           </>
         )}
       </main>
-      
       {selectedPark && <ParkDetail park={selectedPark} onClose={() => setSelectedPark(null)} />}
     </div>
   );
