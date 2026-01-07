@@ -33,7 +33,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
       <i className="fas fa-search absolute left-6 text-stone-400"></i>
       <input 
         type="text" 
-        placeholder="Zoek stad of regio..."
+        placeholder="Zoek een stad of regio..."
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         onKeyDown={(e) => e.key === 'Enter' && handleSearchTrigger()}
@@ -78,11 +78,10 @@ const App: React.FC = () => {
     setStatus('idle');
 
     try {
-      // De prompt vraagt nu om 15 locaties voor een uitgebreidere lijst
-      const prompt = `Lijst minimaal 15 beeldenparken en openlucht kunstlocaties binnen 50 km van ${query || lat + ',' + lng}. Geef JSON object met 'curatorVibe' (max 2 zinnen tekst) and 'parks' (array met name, location, shortDescription, website, lat, lng).`;
+      const prompt = `Lijst minimaal 15 beeldenparken en openlucht kunstlocaties binnen 50 km van ${query || lat + ',' + lng}. Geef JSON object met 'curatorVibe' (max 2 zinnen tekst) en 'parks' (array met name, location, shortDescription, website, lat, lng).`;
       const res = await askGemini(prompt, []);
       
-      if (res.text.includes("FOUT_SLEUTEL")) {
+      if (res.text === "FOUT_SLEUTEL_ONTBREEKT") {
         setStatus('error_key');
         return;
       }
@@ -93,9 +92,8 @@ const App: React.FC = () => {
           ...p, id: `ai-${Math.random()}`, isAiDiscovered: true 
         }));
 
-        // Filter op 50km voor GPS-precisie
         if (lat && lng) {
-          results = results.filter((p: any) => getDistance(lat, lng, p.lat, p.lng) <= 50);
+          results = results.filter((p: any) => getDistance(lat, lng, p.lat, p.lng) <= 75);
         }
         setAiParks(results);
         setCuratorText(data.curatorVibe || '');
@@ -117,7 +115,7 @@ const App: React.FC = () => {
         setUserLocation(loc);
         setIsNearbyMode(true);
         performSearch("", loc.lat, loc.lng);
-      }, () => alert("GPS nodig voor radar."));
+      }, () => alert("GPS toegang is nodig voor de radar functie."));
     } else {
       setIsNearbyMode(false);
       setUserLocation(null);
@@ -156,14 +154,18 @@ const App: React.FC = () => {
         {!hasSearched && !isNearbyMode ? (
           <div className="text-center py-24 max-w-2xl mx-auto">
             <h2 className="text-5xl font-bold text-stone-900 serif mb-6">Ontdek kunst in de open lucht.</h2>
-            <p className="text-stone-500 mb-10 text-lg italic">"De mooiste musea hebben geen dak."</p>
+            <p className="text-stone-500 mb-10 text-lg italic">Scan elke regio voor beeldenparken en land-art.</p>
             <SearchBar searchTerm={searchTerm} setSearchTerm={setSearchTerm} handleSearchTrigger={() => performSearch(searchTerm)} toggleRadar={toggleRadar} isAiLoading={isAiLoading} isNearbyMode={isNearbyMode} />
           </div>
         ) : (
           <>
             {status === 'error_key' && (
-              <div className="mb-8 p-4 bg-amber-50 border border-amber-200 rounded-xl text-amber-800 text-sm">
-                <b>Configuratie nodig:</b> API-sleutel niet gevonden.
+              <div className="mb-8 p-6 bg-red-50 border border-red-100 rounded-2xl text-red-800 shadow-sm flex items-center gap-4">
+                <i className="fas fa-exclamation-triangle text-2xl"></i>
+                <div>
+                  <h3 className="font-bold">Configuratie Fout</h3>
+                  <p className="text-sm opacity-80">De API-sleutel kon niet worden geladen. Controleer of 'API_KEY' correct is ingesteld in je omgevingsvariabelen.</p>
+                </div>
               </div>
             )}
 
@@ -179,9 +181,9 @@ const App: React.FC = () => {
             <div className="mb-8 flex justify-between items-end">
               <div>
                 <h2 className="text-3xl font-bold text-stone-900 serif">
-                  {isAiLoading ? 'De radar scant...' : `${sortedParks.length} Locaties gevonden`}
+                  {isAiLoading ? 'De radar scant de regio...' : `${sortedParks.length} Locaties gevonden`}
                 </h2>
-                <p className="text-stone-400 text-xs mt-1 uppercase tracking-widest font-bold">Max 50 km van bestemming</p>
+                <p className="text-stone-400 text-xs mt-1 uppercase tracking-widest font-bold">Bereik: ~50-75 km</p>
               </div>
             </div>
 
@@ -191,15 +193,15 @@ const App: React.FC = () => {
               ))}
               {isAiLoading && (
                  <div className="col-span-full py-20 text-center">
-                    <div className="w-10 h-10 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin mx-auto mb-4"></div>
-                    <p className="text-stone-400 text-xs font-black uppercase tracking-widest">Diepgaande scan bezig...</p>
+                    <div className="w-12 h-12 border-4 border-blue-600/10 border-t-blue-600 rounded-full animate-spin mx-auto mb-6"></div>
+                    <p className="text-stone-500 font-medium serif text-xl italic">De curator stelt een unieke lijst samen...</p>
                  </div>
               )}
             </div>
 
-            {!isAiLoading && sortedParks.length === 0 && (
+            {!isAiLoading && sortedParks.length === 0 && status === 'idle' && (
               <div className="text-center py-20 bg-stone-50 rounded-3xl border border-dashed border-stone-200">
-                <p className="text-stone-400 italic serif text-lg">Geen locaties gevonden binnen de straal van 50 km.</p>
+                <p className="text-stone-400 italic serif text-lg">Geen locaties gevonden in deze regio. Probeer een andere stad of zoom uit.</p>
               </div>
             )}
           </>
