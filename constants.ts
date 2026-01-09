@@ -9,85 +9,28 @@ export const INITIAL_PARKS: SculpturePark[] = [
     location: 'Otterlo', 
     lat: 52.0952, lng: 5.8169, 
     website: 'https://krollermuller.nl',
-    shortDescription: 'Een van de grootste beeldentuinen van Europa, gelegen in Nationaal Park De Hoge Veluwe. Herbergt topstukken van Rodin, Moore en Dubuffet.'
+    shortDescription: 'Een van de grootste beeldentuinen van Europa. Een perfecte synthese van kunst, architectuur en natuur op de Veluwe.',
+    estimatedArtCount: 160
   },
   { 
-    id: 'beelden-aan-zee', 
-    name: 'Museum Beelden aan Zee', 
-    location: 'Scheveningen', 
-    lat: 52.1118, lng: 4.2797, 
-    website: 'https://www.beeldenaanzee.nl',
-    shortDescription: 'Uniek museum in de duinen exclusief gewijd aan moderne en hedendaagse beeldhouwkunst, inclusief de beroemde "SprookjesBeelden aan Zee".'
+    id: 'observatorium', 
+    name: 'Observatorium (Robert Morris)', 
+    location: 'Lelystad', 
+    lat: 52.5517, lng: 5.5562, 
+    website: 'https://www.landartflevoland.nl',
+    shortDescription: 'Iconisch Land Art project in Flevoland. Een modern megalithisch monument dat de zonnewendes markeert.',
+    isLandArt: true,
+    estimatedArtCount: 1
   },
   { 
-    id: 'voorlinden', 
-    name: 'Museum Voorlinden', 
-    location: 'Wassenaar', 
-    lat: 52.1171, lng: 4.3321, 
-    website: 'https://www.voorlinden.nl',
-    shortDescription: 'Particulier museum voor moderne en hedendaagse kunst op een prachtig landgoed met wisselende sculpturen in de tuin.'
-  },
-  // --- BELGIË ---
-  { 
-    id: 'middelheim', 
-    name: 'Middelheimmuseum', 
-    location: 'Antwerpen', 
-    lat: 51.1820, lng: 4.4121, 
-    website: 'https://middelheimmuseum.be',
-    shortDescription: 'Een uitgestrekt beeldenpark dat een overzicht biedt van meer dan honderd jaar beeldhouwkunst in een prachtig historisch parklandschap.'
-  },
-  // --- FRANKRIJK ---
-  { 
-    id: 'fondation-maeght', 
-    name: 'Fondation Maeght', 
-    location: 'Saint-Paul-de-Vence', 
-    lat: 43.7006, lng: 7.1147, 
-    website: 'https://www.fondation-maeght.com',
-    shortDescription: 'Een wereldberoemd privémuseum in Zuid-Frankrijk met een unieke integratie van architectuur, natuur en kunst (Miró, Giacometti, Calder).'
-  },
-  { 
-    id: 'la-defense', 
-    name: 'Paris La Défense Art', 
-    location: 'Parijs', 
-    lat: 48.8919, lng: 2.2384, 
-    website: 'https://parisladefense.com',
-    shortDescription: 'Het grootste openluchtmuseum van Frankrijk, met meer dan 70 monumentale kunstwerken midden in het zakendistrict.'
-  },
-  // --- DUITSLAND ---
-  { 
-    id: 'hombroich', 
-    name: 'Museum Insel Hombroich', 
-    location: 'Neuss', 
-    lat: 51.1478, lng: 6.6586, 
-    website: 'https://www.inselhombroich.de',
-    shortDescription: 'Een "open museum" waar kunst en natuur samenvloeien in een weidelandschap met minimalistische paviljoens en sculpturen.'
-  },
-  // --- VERENIGD KONINKRIJK ---
-  { 
-    id: 'yorkshire-sculpture', 
-    name: 'Yorkshire Sculpture Park', 
-    location: 'Wakefield', 
-    lat: 53.6138, lng: -1.5701, 
-    website: 'https://ysp.org.uk',
-    shortDescription: 'Het leidende beeldenpark van het VK, met wisselende tentoonstellingen op een landgoed van 500 hectare, beroemd om de werken van Henry Moore.'
-  },
-  // --- ITALIË ---
-  { 
-    id: 'chianti-sculpture', 
-    name: 'Chianti Sculpture Park', 
-    location: 'Siena', 
-    lat: 43.3888, lng: 11.3667, 
-    website: 'https://www.chiantisculpturepark.it',
-    shortDescription: 'Een permanente tentoonstelling van hedendaagse installaties en sculpturen, geïntegreerd in een magisch eikenbos in Toscane.'
-  },
-  // --- DENEMARKEN ---
-  { 
-    id: 'louisiana-museum', 
-    name: 'Louisiana Museum of Modern Art', 
-    location: 'Humlebæk', 
-    lat: 55.9691, lng: 12.5441, 
-    website: 'https://www.louisiana.dk',
-    shortDescription: 'Wereldberoemd museum waar de beeldentuin met uitzicht over de Sont een essentieel onderdeel is van de ervaring.'
+    id: 'groene-kathedraal', 
+    name: 'De Groene Kathedraal', 
+    location: 'Almere', 
+    lat: 52.3236, lng: 5.3189, 
+    website: 'https://www.landartflevoland.nl',
+    shortDescription: 'Een levend Land Art project van Marinus Boezem. De plattegrond van de kathedraal van Reims, gevormd door 178 populieren.',
+    isLandArt: true,
+    estimatedArtCount: 1
   },
   // --- SPANJE ---
   { 
@@ -96,6 +39,55 @@ export const INITIAL_PARKS: SculpturePark[] = [
     location: 'Hernani', 
     lat: 43.2789, lng: -1.9991, 
     website: 'https://www.museochillidaleku.com',
-    shortDescription: 'Het persoonlijke openluchtmuseum van Eduardo Chillida. Monumentale ijzeren en stalen beelden verspreid over een Baskisch landgoed.'
+    shortDescription: 'Het persoonlijke openluchtmuseum van Eduardo Chillida. Monumentale ijzeren beelden verspreid over een Baskisch landgoed.',
+    estimatedArtCount: 40
+  },
+  { 
+    id: 'nmiet-fundacion', 
+    name: 'NMAC Foundation (Montenmedio)', 
+    location: 'Vejer de la Frontera', 
+    lat: 36.2555, lng: -5.9281, 
+    website: 'https://fundacionnmac.org',
+    shortDescription: 'Een uniek beeldenpark in een mediterraan pijnboombos. Hedendaagse kunstenaars creëren hier werken die reageren op de geschiedenis en natuur van de regio.',
+    estimatedArtCount: 25
+  },
+  { 
+    id: 'can-prunera', 
+    name: 'Can Prunera Beeldentuin', 
+    location: 'Sóller, Mallorca', 
+    lat: 39.7667, lng: 2.7150, 
+    website: 'https://canprunera.com',
+    shortDescription: 'Moderne beelden in een prachtige tuin bij een Art Nouveau herenhuis.',
+    estimatedArtCount: 12
+  },
+  { 
+    id: 'los-barruecos', 
+    name: 'Museo Vostell Malpartida', 
+    location: 'Cáceres', 
+    lat: 39.4239, lng: -6.5055, 
+    website: 'https://museovostell.org',
+    shortDescription: 'Fluxus kunst en Land Art in een spectaculair natuurgebied van granietblokken. Kunst die de grens tussen object en landschap opzoekt.',
+    isLandArt: true,
+    estimatedArtCount: 20
+  },
+  // --- BELGIË ---
+  { 
+    id: 'middelheim', 
+    name: 'Middelheimmuseum', 
+    location: 'Antwerpen', 
+    lat: 51.1820, lng: 4.4121, 
+    website: 'https://middelheimmuseum.be',
+    shortDescription: 'Honderd jaar beeldhouwkunst in een historisch park.',
+    estimatedArtCount: 200
+  },
+  // --- DUITSLAND ---
+  { 
+    id: 'hombroich', 
+    name: 'Museum Insel Hombroich', 
+    location: 'Neuss', 
+    lat: 51.1478, lng: 6.6586, 
+    website: 'https://www.inselhombroich.de',
+    shortDescription: 'Kunst en natuur in een weidelandschap met minimalistische paviljoens.',
+    estimatedArtCount: 50
   }
 ];

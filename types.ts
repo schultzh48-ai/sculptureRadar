@@ -8,6 +8,8 @@ export interface SculpturePark {
   website: string;
   lat: number;
   lng: number;
+  isLandArt?: boolean;
+  estimatedArtCount?: number;
 }
 
 export interface ChatMessage {
