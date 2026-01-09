@@ -4,9 +4,12 @@ import { ChatMessage } from "../types";
 
 export async function askGemini(prompt: string, history: ChatMessage[]) {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) return { text: "ERROR", error: "Geen API-sleutel geconfigureerd.", sources: [] };
+  if (!apiKey) {
+    return { text: "ERROR", error: "API-sleutel niet gevonden in de omgeving.", sources: [] };
+  }
 
   try {
+    // Initialiseer de client direct voor de aanroep om de meest actuele sleutel te gebruiken
     const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     
     const response: GenerateContentResponse = await ai.models.generateContent({
@@ -48,33 +51,35 @@ export async function askGemini(prompt: string, history: ChatMessage[]) {
           FORMAT: JSON only.`,
         temperature: 0,
         topP: 0.1,
-        thinkingConfig: { thinkingBudget: 0 }
       },
     });
 
     const text = response.text;
-    if (!text) throw new Error("Lege response");
+    if (!text) throw new Error("Lege response van Gemini");
     
     return { text: text, sources: [] };
   } catch (error: any) {
-    console.error("Gemini API Error details:", error);
-    return { text: "ERROR", error: "Radar kon geen objecten vinden.", sources: [] };
+    console.error("Gemini API Error:", error);
+    return { text: "ERROR", error: "De radar kon geen verbinding maken met de AI-service. Controleer de configuratie.", sources: [] };
   }
 }
 
 export async function getDeepDive(artworkName: string, location: string) {
-  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+  const apiKey = process.env.API_KEY;
+  if (!apiKey) return "API configuratie fout.";
+
   try {
+    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: `Analyseer "${artworkName}" in "${location}". Focus op kunstenaar, betekenis en materiaal. Max 60 woorden. NL.`,
       config: {
         temperature: 0,
-        thinkingConfig: { thinkingBudget: 0 }
       }
     });
     return response.text;
   } catch (error) {
-    return "Details niet beschikbaar.";
+    console.error("Deep Dive Error:", error);
+    return "Details konden niet worden opgehaald door een technisch probleem.";
   }
 }
