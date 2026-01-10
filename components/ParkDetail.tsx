@@ -5,7 +5,6 @@ import { getDeepDive } from '../services/gemini';
 
 interface ParkDetailProps {
   park: SculpturePark & { 
-    distance?: number, 
     searchOrigin?: { lat: number, lng: number },
     isSolitary?: boolean 
   };

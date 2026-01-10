@@ -1,85 +1,121 @@
 
-import { GoogleGenAI, GenerateContentResponse, Type } from "@google/genai";
-import { ChatMessage } from "../types";
+import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 
-export async function askGemini(prompt: string, history: ChatMessage[]) {
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// Gebruik het aanbevolen model voor algemene taken
+const MODEL_NAME = 'gemini-3-flash-preview';
+
+async function callGeminiWithRetry(ai: any, params: any, retries = 2): Promise<GenerateContentResponse> {
+  try {
+    const response = await ai.models.generateContent(params);
+    return response;
+  } catch (error: any) {
+    if (retries > 0) {
+      await sleep(2000);
+      return callGeminiWithRetry(ai, params, retries - 1);
+    }
+    throw error;
+  }
+}
+
+export async function getAddressFromCoords(lat: number, lng: number): Promise<string | null> {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) {
-    return { text: "ERROR", error: "API-sleutel niet gevonden in de omgeving.", sources: [] };
+  if (!apiKey || apiKey === "undefined") return null;
+  const ai = new GoogleGenAI({ apiKey: apiKey });
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: `Welke stad hoort bij: ${lat}, ${lng}? Antwoord kort (bijv "Madrid"). Geen extra tekst.`,
+    });
+    return response.text.replace(/[*_#]/g, '').trim();
+  } catch (error) {
+    return null;
+  }
+}
+
+export async function getGeocode(query: string): Promise<{ lat: number, lng: number } | null> {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "undefined") return null;
+  const ai = new GoogleGenAI({ apiKey: apiKey });
+  
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: `Coördinaten voor centrum van: ${query}. Antwoord UITSLUITEND in JSON: {"lat": getal, "lng": getal}`,
+      config: {
+        responseMimeType: "application/json"
+      }
+    });
+    
+    const text = response.text.trim();
+    const data = JSON.parse(text || '{}');
+    if (data.lat && data.lng) {
+      return { lat: Number(data.lat), lng: Number(data.lng) };
+    }
+    return null;
+  } catch (error) {
+    return null;
+  }
+}
+
+export async function askGemini(query: string) {
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "undefined" || apiKey.length < 10) {
+    return { text: "ERROR", error: "API-sleutel niet gevonden." };
   }
 
+  const ai = new GoogleGenAI({ apiKey: apiKey });
+
+  const systemInstruction = `Je bent een gids voor beeldenparken.
+  Zoek naar BESTAANDE parken binnen 50 km van ${query}.
+  Antwoord UITSLUITEND in JSON:
+  {
+    "parks": [
+      {
+        "name": "Naam", 
+        "location": "Plaats", 
+        "shortDescription": "Beschrijving", 
+        "lat": 0.0, 
+        "lng": 0.0, 
+        "sourceUrl": "URL"
+      }
+    ]
+  }`;
+
   try {
-    // Initialiseer de client direct voor de aanroep om de meest actuele sleutel te gebruiken
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-    
-    const response: GenerateContentResponse = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview', 
-      contents: prompt,
+    const response = await callGeminiWithRetry(ai, {
+      model: MODEL_NAME,
+      contents: `Vind beeldenparken binnen 50km van: ${query}.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: {
-          type: Type.OBJECT,
-          properties: {
-            curatorVibe: { type: Type.STRING },
-            searchLat: { type: Type.NUMBER },
-            searchLng: { type: Type.NUMBER },
-            parks: {
-              type: Type.ARRAY,
-              items: {
-                type: Type.OBJECT,
-                properties: {
-                  name: { type: Type.STRING },
-                  location: { type: Type.STRING },
-                  shortDescription: { type: Type.STRING },
-                  lat: { type: Type.NUMBER },
-                  lng: { type: Type.NUMBER },
-                  isSolitary: { type: Type.BOOLEAN }
-                },
-                required: ["name", "location", "lat", "lng"]
-              }
-            }
-          },
-          required: ["parks", "searchLat", "searchLng"]
-        },
-        systemInstruction: `Je bent een curator voor buitenkunst.
-          TAAK: Vind maximaal 12 kunstobjecten in de gevraagde regio. 
-          BALANS: Zoek eerst naar de 6 meest prominente beeldenparken of openluchtmusea (indien aanwezig). 
-          AANVULLING: Vul de lijst aan tot 12 met solitaire monumentale sculpturen in de publieke ruimte (bijv. Jaume Plensa, Henry Moore, Richard Serra).
-          STABILITEIT: Geef bij voorkeur altijd dezelfde top-locaties terug voor een specifieke regio.
-          PRECISIE: Gebruik Google Search voor exacte GPS-coördinaten.
-          FORMAT: JSON only.`,
-        temperature: 0,
-        topP: 0.1,
+        systemInstruction,
+        temperature: 0.1
       },
     });
 
-    const text = response.text;
-    if (!text) throw new Error("Lege response van Gemini");
-    
-    return { text: text, sources: [] };
+    return { text: response.text };
   } catch (error: any) {
-    console.error("Gemini API Error:", error);
-    return { text: "ERROR", error: "De radar kon geen verbinding maken met de AI-service. Controleer de configuratie.", sources: [] };
+    return { text: "ERROR", error: `Systeemfout: ${error.message}` };
   }
 }
 
 export async function getDeepDive(artworkName: string, location: string) {
   const apiKey = process.env.API_KEY;
-  if (!apiKey) return "API configuratie fout.";
-
+  if (!apiKey || apiKey === "undefined") return "Fout.";
+  const ai = new GoogleGenAI({ apiKey: apiKey });
   try {
-    const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
     const response = await ai.models.generateContent({
-      model: 'gemini-3-flash-preview',
-      contents: `Analyseer "${artworkName}" in "${location}". Focus op kunstenaar, betekenis en materiaal. Max 60 woorden. NL.`,
+      model: MODEL_NAME,
+      contents: `Details over collectie van "${artworkName}" in "${location}".`,
       config: {
-        temperature: 0,
+        tools: [{ googleSearch: {} }]
       }
     });
     return response.text;
   } catch (error) {
-    console.error("Deep Dive Error:", error);
-    return "Details konden niet worden opgehaald door een technisch probleem.";
+    return "Niet beschikbaar.";
   }
 }
