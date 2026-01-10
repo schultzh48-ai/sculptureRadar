@@ -21,7 +21,10 @@ function robustParseJSON(text: string) {
   let cleaned = text.trim();
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
-  if (start === -1 || end === -1) throw new Error("Ongeldige data structuur");
+  if (start === -1 || end === -1) {
+    console.error("Raw AI response:", text);
+    throw new Error("De AI gaf geen geldig resultaat terug. Controleer de console.");
+  }
   return JSON.parse(cleaned.substring(start, end + 1));
 }
 
@@ -62,14 +65,12 @@ const App: React.FC = () => {
       if (!geo) throw new Error("Locatie niet gevonden. Probeer een andere stad.");
       setSearchCoordinates(geo);
 
-      // Toon tijdelijk coördinaten als er geen tekst-query is (bij GPS)
       if (!query && coords) {
         setResolvedLocationName(`${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)}`);
       } else {
         setResolvedLocationName(query);
       }
 
-      // Haal de super-specifieke locatienaam op (bijv Odijk ipv Zeist)
       const locationName = await getAddressFromCoords(geo.lat, geo.lng);
       if (locationName) {
         setResolvedLocationName(locationName);
@@ -78,7 +79,9 @@ const App: React.FC = () => {
       const searchContext = locationName || query || `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`;
       const res = await askGemini(searchContext);
       
-      if (res.text === "ERROR") throw new Error(res.error);
+      if (res.text === "ERROR") {
+        throw new Error(res.error || "De AI-service is niet beschikbaar. Controleer of de API_KEY in Vercel is ingesteld.");
+      }
 
       const data = robustParseJSON(res.text);
       const raw = Array.isArray(data.parks) ? data.parks : [];
@@ -97,6 +100,7 @@ const App: React.FC = () => {
 
       setAiParks(mapped);
     } catch (e: any) {
+      console.error("Search error:", e);
       setError(e.message || "Er ging iets mis bij het scannen.");
     } finally {
       setIsLoading(false);
@@ -112,8 +116,8 @@ const App: React.FC = () => {
         await performSearch("", coords);
         setIsLocating(false);
       },
-      () => {
-        setError("GPS toegang geweigerd.");
+      (err) => {
+        setError(`GPS toegang geweigerd: ${err.message}`);
         setIsLocating(false);
       },
       { timeout: 8000 }
@@ -216,7 +220,10 @@ const App: React.FC = () => {
             {error && (
               <div className="p-6 bg-red-50 border border-red-100 text-red-800 rounded-3xl text-sm font-medium flex items-center gap-4">
                 <i className="fas fa-exclamation-triangle text-xl text-red-400"></i>
-                {error}
+                <div>
+                  <p className="font-bold">Er is een probleem:</p>
+                  <p className="opacity-80">{error}</p>
+                </div>
               </div>
             )}
 
