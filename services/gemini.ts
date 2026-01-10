@@ -7,19 +7,21 @@ const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 const MODEL_NAME = 'gemini-3-flash-preview';
 
 /**
- * Haalt de API-sleutel op. 
- * Prioriteit: VITE_API_KEY (standaard voor Vite/Vercel) -> API_KEY.
+ * Haalt de API-sleutel op op een manier die werkt in Vite (Vercel).
  */
 function getApiKey(): string {
-  // In een browser omgeving op Vercel worden variabelen zonder VITE_ prefix vaak gestript.
-  // We proberen alle mogelijke plekken waar de sleutel kan staan.
-  const key = (process.env.VITE_API_KEY) || 
-              (process.env.API_KEY) || 
-              ((window as any).VITE_API_KEY);
+  // @ts-ignore - Vite gebruikt import.meta.env, Vercel injecteert soms process.env
+  const env = (import.meta as any).env || {};
+  const processEnv = typeof process !== 'undefined' ? process.env : {};
+
+  const key = env.VITE_API_KEY || 
+              processEnv.VITE_API_KEY || 
+              processEnv.API_KEY || 
+              (window as any).VITE_API_KEY;
   
   if (!key || key === "undefined" || key === "") {
-    console.error("DEBUG: API_KEY configuratie ontbreekt.");
-    throw new Error("Configuratie-fout: Zorg dat VITE_API_KEY in Vercel 'Environment Variables' staat en doe een Redeploy.");
+    console.error("DEBUG: API_KEY niet gevonden in omgeving.");
+    throw new Error("Configuratie-fout: De browser kan de VITE_API_KEY niet vinden. Controleer of je de variabele in Vercel hebt hernoemd naar VITE_API_KEY en daarna een 'Redeploy' hebt uitgevoerd.");
   }
   return key;
 }
@@ -31,14 +33,12 @@ async function callGeminiWithRetry(ai: any, params: any, retries = 2): Promise<G
   } catch (error: any) {
     console.error("Gemini API Call Error:", error);
     
-    // Check voor ongeldige sleutel
     if (error.message?.includes("API key not valid")) {
-      throw new Error("De API-sleutel is ongeldig. Controleer de waarde in je Vercel instellingen.");
+      throw new Error("De API-sleutel is ongeldig. Controleer op spaties in je Vercel instellingen.");
     }
     
-    // Check voor quota (gratis tier limieten)
     if (error.message?.includes("429") || error.message?.includes("quota")) {
-      throw new Error("Te veel verzoeken tegelijk (Quota bereikt). Wacht een minuutje.");
+      throw new Error("Systeem is even overbelast (Quota). Wacht 10 seconden en probeer het opnieuw.");
     }
 
     if (retries > 0) {
@@ -56,7 +56,7 @@ export async function getAddressFromCoords(lat: number, lng: number): Promise<st
     
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
-      contents: `Plaatsnaam voor de coördinaten: ${lat}, ${lng}. Antwoord alleen met 'Stad (Provincie)'.`,
+      contents: `Geef de plaatsnaam en regio voor: ${lat}, ${lng}. Antwoord kort: 'Stad, Regio'.`,
     });
     return response.text?.replace(/[*_#]/g, '').trim() || null;
   } catch (error) {
@@ -71,7 +71,7 @@ export async function getGeocode(query: string): Promise<{ lat: number, lng: num
     
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
-      contents: `Wat zijn de coördinaten van: ${query}? Geef alleen JSON terug: {"lat": getal, "lng": getal}`,
+      contents: `Coördinaten voor: ${query}. Geef alleen JSON: {"lat": getal, "lng": getal}`,
       config: { responseMimeType: "application/json" }
     });
     
@@ -87,26 +87,26 @@ export async function askGemini(query: string) {
     const apiKey = getApiKey();
     const ai = new GoogleGenAI({ apiKey });
 
-    const systemInstruction = `Je bent een expert in Europese beeldenparken en openlucht kunst.
-    Zoek beeldenparken of land-art locaties binnen een straal van 50 km van ${query}. 
-    Gebruik Google Search voor actuele informatie.
-    Antwoord uitsluitend in dit JSON formaat:
+    const systemInstruction = `Je bent een gespecialiseerde gids voor kunst in de openbare ruimte.
+    Zoek beeldenparken, beeldentuinen of belangrijke land-art locaties binnen 50 km van ${query}.
+    Maak gebruik van Google Search voor de meest actuele locaties.
+    Antwoord strikt in JSON:
     {
       "parks": [
         {
-          "name": "Naam van het park", 
-          "location": "Stad/Regio", 
-          "shortDescription": "Korte boeiende beschrijving", 
+          "name": "Naam", 
+          "location": "Plaats", 
+          "shortDescription": "Beschrijving", 
           "lat": 0.0, 
           "lng": 0.0, 
-          "sourceUrl": "URL van website"
+          "sourceUrl": "URL"
         }
       ]
     }`;
 
     const response = await callGeminiWithRetry(ai, {
       model: MODEL_NAME,
-      contents: `Vind beeldenparken in de buurt van ${query}.`,
+      contents: `Vind beeldenparken nabij ${query}.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -127,11 +127,11 @@ export async function getDeepDive(artworkName: string, location: string) {
     const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
-      contents: `Vertel me meer over de kunst en geschiedenis van "${artworkName}" in "${location}". Wat maakt deze plek uniek?`,
+      contents: `Vertel een inspirerend verhaal over de kunst op de locatie "${artworkName}" in "${location}". Focus op de beleving en geschiedenis.`,
       config: { tools: [{ googleSearch: {} }] }
     });
-    return response.text || "Geen extra details beschikbaar op dit moment.";
+    return response.text || "Geen details gevonden.";
   } catch (error) {
-    return "Informatie kon niet worden opgehaald.";
+    return "Informatie tijdelijk niet beschikbaar.";
   }
 }
