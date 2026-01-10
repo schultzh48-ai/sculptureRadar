@@ -28,12 +28,23 @@ function robustParseJSON(text: string) {
 const App: React.FC = () => {
   const [selectedPark, setSelectedPark] = useState<any>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [resolvedLocationName, setResolvedLocationName] = useState('');
   const [aiParks, setAiParks] = useState<SculpturePark[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [searchCoordinates, setSearchCoordinates] = useState<{lat: number, lng: number} | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const resetSearch = useCallback(() => {
+    setHasSearched(false);
+    setSearchTerm('');
+    setResolvedLocationName('');
+    setAiParks([]);
+    setSearchCoordinates(null);
+    setError(null);
+    setSelectedPark(null);
+  }, []);
 
   const performSearch = useCallback(async (query: string, coords?: {lat: number, lng: number}) => {
     if (!query && !coords) return;
@@ -51,7 +62,20 @@ const App: React.FC = () => {
       if (!geo) throw new Error("Locatie niet gevonden. Probeer een andere stad.");
       setSearchCoordinates(geo);
 
-      const searchContext = query || `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`;
+      // Toon tijdelijk coördinaten als er geen tekst-query is (bij GPS)
+      if (!query && coords) {
+        setResolvedLocationName(`${coords.lat.toFixed(3)}, ${coords.lng.toFixed(3)}`);
+      } else {
+        setResolvedLocationName(query);
+      }
+
+      // Haal de super-specifieke locatienaam op (bijv Odijk ipv Zeist)
+      const locationName = await getAddressFromCoords(geo.lat, geo.lng);
+      if (locationName) {
+        setResolvedLocationName(locationName);
+      }
+
+      const searchContext = locationName || query || `${geo.lat.toFixed(4)}, ${geo.lng.toFixed(4)}`;
       const res = await askGemini(searchContext);
       
       if (res.text === "ERROR") throw new Error(res.error);
@@ -67,7 +91,8 @@ const App: React.FC = () => {
         lat: parseFloat(p.lat),
         lng: parseFloat(p.lng),
         isAiDiscovered: true,
-        website: p.sourceUrl || '#'
+        website: p.sourceUrl || '#',
+        searchOrigin: geo
       })).filter(p => p.name && !isNaN(p.lat) && !isNaN(p.lng));
 
       setAiParks(mapped);
@@ -84,13 +109,8 @@ const App: React.FC = () => {
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const coords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
-        setSearchTerm(""); 
         await performSearch("", coords);
         setIsLocating(false);
-        try {
-          const addr = await getAddressFromCoords(coords.lat, coords.lng);
-          if (addr) setSearchTerm(addr);
-        } catch {}
       },
       () => {
         setError("GPS toegang geweigerd.");
@@ -107,7 +127,7 @@ const App: React.FC = () => {
       ...p,
       distance: getPreciseDistance(searchCoordinates.lat, searchCoordinates.lng, p.lat, p.lng)
     }))
-    .filter(p => p.distance <= 50) 
+    .filter(p => p.distance <= 55)
     .sort((a, b) => a.distance - b.distance);
   }, [aiParks, searchCoordinates]);
 
@@ -115,14 +135,19 @@ const App: React.FC = () => {
     <div className="min-h-screen bg-[#fbfbf9] text-stone-900">
       <header className="bg-white/90 backdrop-blur-md border-b border-stone-100 p-6 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={() => window.location.reload()}>
+          <div className="flex items-center gap-3 cursor-pointer" onClick={resetSearch}>
             <div className="w-10 h-10 bg-blue-600 rounded-2xl flex items-center justify-center text-white shadow-lg">
               <i className="fas fa-bullseye"></i>
             </div>
             <h1 className="text-2xl font-black serif">Sculptuur<span className="text-blue-600 italic">Radar</span></h1>
           </div>
           {hasSearched && (
-            <button onClick={() => window.location.reload()} className="text-xs font-bold uppercase tracking-widest text-stone-400 hover:text-stone-900">Nieuwe Zoekopdracht</button>
+            <button 
+              onClick={resetSearch} 
+              className="text-xs font-bold uppercase tracking-widest text-stone-400 hover:text-stone-900 px-4 py-2 hover:bg-stone-50 rounded-lg transition-all"
+            >
+              Nieuwe Zoekopdracht
+            </button>
           )}
         </div>
       </header>
@@ -133,7 +158,6 @@ const App: React.FC = () => {
             <h2 className="text-5xl font-bold serif mb-12 leading-tight">Vind kunst in de <span className="text-blue-600 italic">open lucht.</span></h2>
             
             <div className="space-y-6">
-              {/* Optie 1: Plaatsnaam */}
               <div className="bg-white p-6 rounded-[2.5rem] shadow-xl border border-stone-100">
                 <p className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-400 mb-4 text-left px-4">Optie 1: Zoek op stad</p>
                 <div className="flex gap-2">
@@ -159,7 +183,6 @@ const App: React.FC = () => {
                 <div className="flex-1 h-px bg-stone-200"></div>
               </div>
 
-              {/* Optie 2: GPS */}
               <button 
                 onClick={handleGPS}
                 disabled={isLocating}
@@ -180,9 +203,14 @@ const App: React.FC = () => {
             <div className="flex items-center justify-between border-b border-stone-100 pb-6">
               <div>
                 <h3 className="text-stone-400 font-black text-[10px] uppercase tracking-widest mb-1">Resultaten</h3>
-                <p className="text-2xl font-bold serif">Binnen 50 km van {searchTerm || "uw locatie"}</p>
+                <p className="text-2xl font-bold serif">Binnen 50 km van <span className="text-blue-600 italic">{resolvedLocationName || 'uw locatie'}</span></p>
               </div>
-              <button onClick={() => window.location.reload()} className="px-4 py-2 bg-stone-100 hover:bg-stone-200 rounded-xl text-[10px] font-bold uppercase transition-colors">Aanpassen</button>
+              <button 
+                onClick={resetSearch} 
+                className="px-4 py-2 bg-stone-100 hover:bg-stone-200 rounded-xl text-[10px] font-bold uppercase transition-colors"
+              >
+                Aanpassen
+              </button>
             </div>
 
             {error && (
@@ -211,8 +239,8 @@ const App: React.FC = () => {
             {!isLoading && visibleParks.length === 0 && !error && (
               <div className="py-20 text-center bg-stone-50 rounded-[3rem] border border-dashed border-stone-200">
                 <i className="fas fa-map-marked-alt text-4xl text-stone-200 mb-4"></i>
-                <p className="text-stone-400 serif text-xl italic mb-2">Geen parken gevonden binnen 50km.</p>
-                <button onClick={() => window.location.reload()} className="text-blue-600 font-bold text-xs uppercase underline">Probeer een andere plek</button>
+                <p className="text-stone-400 serif text-xl italic mb-2">Geen parken gevonden binnen 50km van {resolvedLocationName}.</p>
+                <button onClick={resetSearch} className="text-blue-600 font-bold text-xs uppercase underline">Probeer een andere plek</button>
               </div>
             )}
           </div>
