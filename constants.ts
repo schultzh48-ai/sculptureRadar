@@ -1,8 +1,17 @@
-
 import { SculpturePark } from './types';
 
 export const INITIAL_PARKS: SculpturePark[] = [
   // --- NEDERLAND ---
+  { 
+    id: 'mannes-assen', 
+    name: 'Mannes (Qubits)', 
+    location: 'Assen (Stationsplein)', 
+    lat: 52.9928, lng: 6.5683, 
+    website: 'https://www.drenthe.nl',
+    shortDescription: 'De zes meter hoge interactieve hond die reizigers in Assen verwelkomt. Mannes is gemaakt van accoya-hout en "ademt" stoom uit als er mensen in de buurt zijn.',
+    isLandArt: true,
+    estimatedArtCount: 1
+  },
   { 
     id: 'kroller-muller', 
     name: 'Kröller-Müller Museum', 
@@ -32,14 +41,45 @@ export const INITIAL_PARKS: SculpturePark[] = [
     isLandArt: true,
     estimatedArtCount: 1
   },
+  // --- FRANKRIJK ---
+  { 
+    id: 'sanna-plensa-bordeaux', 
+    name: 'Sanna (Jaume Plensa)', 
+    location: 'Bordeaux (Place de la Comédie)', 
+    lat: 44.8417, lng: -0.5741, 
+    website: 'https://www.bordeaux.fr',
+    shortDescription: 'Een zeven meter hoog gietijzeren gezicht van een jonge vrouw met gesloten ogen. Dit verstilde meesterwerk van Jaume Plensa staat tegenover het Grand Théâtre.',
+    isLandArt: true,
+    estimatedArtCount: 1
+  },
+  { 
+    id: 'lion-bordeaux', 
+    name: 'Le Lion de Veilhan', 
+    location: 'Bordeaux (Place Stalingrad)', 
+    lat: 44.8415, lng: -0.5631, 
+    website: 'https://www.bordeaux.fr',
+    shortDescription: 'De beroemde lichtblauwe, gefacetteerde leeuw van kunstenaar Xavier Veilhan. Een modern symbool van de stad.',
+    isLandArt: true,
+    estimatedArtCount: 1
+  },
   // --- SPANJE ---
+  { 
+    id: 'julia-madrid', 
+    name: 'Julia (Jaume Plensa)', 
+    location: 'Madrid (Plaza de Colón)', 
+    lat: 40.4253, lng: -3.6897, 
+    website: 'https://www.madrid.es',
+    shortDescription: 'Een monumentaal wit beeld van 12 meter hoog. Julia brengt een moment van rust in het drukke centrum van Madrid.',
+    isLandArt: true,
+    estimatedArtCount: 1
+  },
   { 
     id: 'chillida-leku', 
     name: 'Chillida Leku', 
     location: 'Hernani', 
     lat: 43.2789, lng: -1.9991, 
     website: 'https://www.museochillidaleku.com',
-    shortDescription: 'Het persoonlijke openluchtmuseum van Eduardo Chillida. Monumentale ijzeren beelden verspreid over een Baskisch landgoed.',
+    shortDescription: 'Het persoonlijke openluchtmuseum van Eduardo Chillida. Monumentale ijzeren beelden in een Baskisch landschap.',
     estimatedArtCount: 40
   },
   { 
@@ -48,7 +88,7 @@ export const INITIAL_PARKS: SculpturePark[] = [
     location: 'Vejer de la Frontera', 
     lat: 36.2555, lng: -5.9281, 
     website: 'https://fundacionnmac.org',
-    shortDescription: 'Een uniek beeldenpark in een mediterraan pijnboombos. Hedendaagse kunstenaars creëren hier werken die reageren op de natuur.',
+    shortDescription: 'Een uniek beeldenpark in een mediterraan pijnboombos bij Cádiz.',
     estimatedArtCount: 25
   },
   { 
@@ -57,37 +97,8 @@ export const INITIAL_PARKS: SculpturePark[] = [
     location: 'Madrid', 
     lat: 40.4339, lng: -3.6883, 
     website: 'https://www.madrid.es',
-    shortDescription: 'Een verborgen juweel onder de brug van Juan Bravo. Abstracte sculpturen van o.a. Miró en Chillida in de openbare ruimte.',
+    shortDescription: 'Abstracte sculpturen van o.a. Miró en Chillida in de openbare ruimte van Madrid.',
     estimatedArtCount: 17
-  },
-  { 
-    id: 'elogio-gijon', 
-    name: 'Elogio del Horizonte', 
-    location: 'Gijón', 
-    lat: 43.5539, lng: -5.6631, 
-    website: 'https://www.gijon.es',
-    shortDescription: 'Een monumentaal kunstwerk van Chillida op de kliffen van Cerro de Santa Catalina. Een symbool van de stad en de zee.',
-    isLandArt: true,
-    estimatedArtCount: 1
-  },
-  { 
-    id: 'can-prunera', 
-    name: 'Can Prunera Beeldentuin', 
-    location: 'Sóller, Mallorca', 
-    lat: 39.7667, lng: 2.7150, 
-    website: 'https://canprunera.com',
-    shortDescription: 'Moderne beelden in een prachtige tuin bij een Art Nouveau herenhuis op Mallorca.',
-    estimatedArtCount: 12
-  },
-  { 
-    id: 'los-barruecos', 
-    name: 'Museo Vostell Malpartida', 
-    location: 'Cáceres', 
-    lat: 39.4239, lng: -6.5055, 
-    website: 'https://museovostell.org',
-    shortDescription: 'Fluxus kunst en Land Art in een spectaculair natuurgebied van granietblokken.',
-    isLandArt: true,
-    estimatedArtCount: 20
   },
   // --- BELGIË ---
   { 

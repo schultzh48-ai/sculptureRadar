@@ -1,76 +1,82 @@
 
-import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
+import { GoogleGenAI } from "@google/genai";
 
 const MODEL_NAME = 'gemini-3-flash-preview';
 
+/**
+ * Helper to get the API key from environment variables.
+ */
 function getApiKey(): string {
-  // @ts-ignore
-  const env = (import.meta as any).env || {};
-  const processEnv = typeof process !== 'undefined' ? process.env : {};
-  const key = env.VITE_API_KEY || processEnv.VITE_API_KEY || processEnv.API_KEY;
-  if (!key) throw new Error("API_KEY missing");
-  return key;
+  return process.env.API_KEY || "";
 }
 
+// Correct initialization with named parameter
 const ai = new GoogleGenAI({ apiKey: getApiKey() });
 
-export async function getRegionIntro(query: string): Promise<string> {
+export async function getGeocode(query: string): Promise<{ lat: number, lng: number, name: string } | null> {
   try {
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
-      contents: `Vertel in max 3 zinnen iets poëtisch over de sfeer van de streek/stad ${query} en haar relatie met kunst of sculpturen in de open lucht.`,
+      contents: `Bepaal de coördinaten voor de plaats: "${query}". Antwoord uitsluitend in JSON: {"lat": getal, "lng": getal, "name": "Geformatteerde Naam"}.`,
+      config: { 
+        responseMimeType: "application/json", 
+        temperature: 0.1 
+      }
     });
-    return response.text?.trim() || "";
-  } catch {
-    return "";
-  }
-}
-
-export async function getAddressFromCoords(lat: number, lng: number): Promise<string | null> {
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: `Plaatsnaam voor ${lat}, ${lng}. Alleen 'Stad, Land'.`,
-    });
-    return response.text?.trim() || null;
-  } catch {
-    return "Huidige locatie";
-  }
-}
-
-export async function getGeocode(query: string): Promise<{ lat: number, lng: number } | null> {
-  try {
-    const response = await ai.models.generateContent({
-      model: MODEL_NAME,
-      contents: `Coordinates for ${query}. Return ONLY JSON: {"lat":x,"lng":y}`,
-      config: { responseMimeType: "application/json" }
-    });
-    const data = JSON.parse(response.text || "{}");
-    return (data.lat && data.lng) ? { lat: Number(data.lat), lng: Number(data.lng) } : null;
+    // Use response.text property (not a method)
+    return JSON.parse(response.text || "null");
   } catch {
     return null;
   }
 }
 
-export async function askGemini(query: string) {
+export async function searchParksWithCurator(lat: number, lng: number, locationName: string) {
   try {
-    const systemInstruction = `Gids voor kunstlocaties. Zoek beeldenparken/land-art in ${query}. 
-    Gebruik Google Search. Antwoord direct in JSON:
-    {"parks": [{"name":"..","location":"..","shortDescription":"..","lat":0.0,"lng":0.0,"sourceUrl":"..","isLandArt":true}]}. Max 12.`;
+    const systemInstruction = `Je bent de Senior AI Curator van SculptuurRadar. 
+    Taak 1: Vind beeldenparken, openluchtmusea en solitaire Land Art sculpturen.
+    Taak 2: Zoek specifiek naar "Public Art Icons": monumentale, interactieve of technologische publieke kunstwerken (bijv. "Mannes" in Assen, "Sanna" in Bordeaux) STRIKT binnen een straal van 50 km rondom ${locationName}.
+    Taak 3: Let op innovatieve projecten die gebruik maken van interactiviteit, stoom, licht, kinetiek of unieke materialen.
+    Taak 4: LIMIET: Selecteer de MAXIMAAL 12 meest relevante of indrukwekkende locaties. Kwaliteit boven kwantiteit.
+    JSON STRUCTUUR: {"curatorIntro": "...", "parks": [{"name": "...", "location": "...", "desc": "...", "lat": 0.0, "lng": 0.0, "isSolitary": true/false, "isInteractive": true/false, "url": "..."}]}`;
 
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
-      contents: `Lijst 12 beeldenparken in/nabij ${query}`,
+      contents: `Analyseer kunstlocaties binnen 50 km rondom ${locationName}. Geef een topselectie van maximaal 12 unieke publieke iconen en parken.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         systemInstruction,
-        temperature: 0.1,
+        temperature: 0.2
       },
     });
-    return { text: response.text };
+    
+    // Use response.text property
+    return JSON.parse(response.text || "{\"parks\": [], \"curatorIntro\": \"\"}");
   } catch (error: any) {
-    return { text: "ERROR", error: error.message };
+    console.error("Curator search failed:", error);
+    return { error: error.message };
+  }
+}
+
+export async function askArtistExpert(question: string) {
+  try {
+    const response = await ai.models.generateContent({
+      model: MODEL_NAME,
+      contents: `Onderzoek en beantwoord de volgende vraag over een kunstenaar of kunststroming met nadruk op historische accuraatheid: "${question}"`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        systemInstruction: "Je bent een integere kunsthistoricus. Jouw primaire doel is historische waarheid. Gebruik Google Search om feiten over kunstenaars en collectieven te verifiëren. Focus op materialen, interactiviteit en context. Houd het antwoord zakelijk doch bevlogen (max 180 woorden).",
+        temperature: 0.1,
+      }
+    });
+
+    // Use response.text property
+    const text = response.text || "De expert kon geen geverifieerd antwoord vinden.";
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    
+    return { text, sources };
+  } catch {
+    return { text: "Er ging iets mis bij het raadplegen van de bronnen.", sources: [] };
   }
 }
 
@@ -78,10 +84,16 @@ export async function getDeepDive(artworkName: string, location: string) {
   try {
     const response = await ai.models.generateContent({
       model: MODEL_NAME,
-      contents: `3 korte feiten over "${artworkName}" in "${location}".`,
+      contents: `Geef feitelijke diepgang over "${artworkName}" in "${location}". Focus op kunsthistorische feiten, gebruikte materialen en de interactieve of symbolische betekenis.`,
+      config: { 
+        tools: [{ googleSearch: {} }],
+        maxOutputTokens: 800,
+        temperature: 0.2 
+      }
     });
-    return response.text || "Geen extra informatie.";
+    // Use response.text property
+    return response.text || "";
   } catch {
-    return "Informatie niet beschikbaar.";
+    return "Informatie momenteel niet beschikbaar.";
   }
 }
