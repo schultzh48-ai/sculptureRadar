@@ -8,7 +8,7 @@ import { getGeocode, searchParksWithCurator } from './services/gemini';
 import { INITIAL_PARKS } from './constants';
 
 const SEARCH_RADIUS_KM = 50;
-const DUPLICATE_THRESHOLD_KM = 0.2; // 200 meter
+const DUPLICATE_THRESHOLD_KM = 0.2;
 const MAX_VISIBLE_ITEMS = 12;
 
 function getPreciseDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -51,7 +51,6 @@ const App: React.FC = () => {
     
     try {
       let lat, lng, name;
-
       if (coords) {
         lat = coords.lat;
         lng = coords.lng;
@@ -68,10 +67,9 @@ const App: React.FC = () => {
       setResolvedLocation(name);
 
       const result = await searchParksWithCurator(lat, lng, name);
-      if (result.error) throw new Error("De AI Curator kon de omgeving niet scannen.");
+      if (result.error) throw new Error(result.error);
 
       setCuratorNote(result.curatorIntro || '');
-
       const mapped = (result.parks || []).map((p: any) => ({
         id: `ai-${Math.random().toString(36).substr(2, 9)}`,
         name: p.name,
@@ -87,7 +85,10 @@ const App: React.FC = () => {
 
       setAiParks(mapped);
     } catch (e: any) {
-      setError(e.message);
+      const msg = e.message?.toLowerCase().includes('quota') 
+        ? "De AI Curator is momenteel erg druk (limiet bereikt). Wacht even en probeer het opnieuw."
+        : e.message;
+      setError(msg);
     } finally {
       setLoading(false);
       setIsLocating(false);
@@ -108,7 +109,6 @@ const App: React.FC = () => {
 
   const visibleParks = useMemo(() => {
     if (!searchCoordinates) return [];
-    
     const allCandidates = [...INITIAL_PARKS, ...aiParks];
     const unique: any[] = [];
     allCandidates.forEach(candidate => {
@@ -118,10 +118,7 @@ const App: React.FC = () => {
                          existing.name.toLowerCase().includes(candidate.name.toLowerCase());
         return (dist < DUPLICATE_THRESHOLD_KM) || (sameName && dist < 2.0);
       });
-
-      if (!isDuplicate) {
-        unique.push(candidate);
-      }
+      if (!isDuplicate) unique.push(candidate);
     });
 
     return unique
@@ -132,7 +129,7 @@ const App: React.FC = () => {
       }))
       .filter(p => p.distance <= SEARCH_RADIUS_KM)
       .sort((a, b) => a.distance - b.distance)
-      .slice(0, MAX_VISIBLE_ITEMS); // Limiteer tot 12
+      .slice(0, MAX_VISIBLE_ITEMS);
   }, [aiParks, searchCoordinates]);
 
   return (
@@ -155,9 +152,8 @@ const App: React.FC = () => {
               <h2 className="text-6xl font-bold serif leading-tight tracking-tight">Vind kunst in de <span className="text-blue-600 italic underline decoration-blue-100 underline-offset-8">vrije natuur.</span></h2>
               <p className="text-stone-500 text-lg serif italic">Ontdek een topselectie van 12 beeldenparken en interactieve kunstwerken binnen 50 km.</p>
             </div>
-            
             <div className="space-y-6">
-              <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl border border-stone-100 flex items-center group transition-all ring-offset-4 focus-within:ring-2 ring-blue-500/20">
+              <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl border border-stone-100 flex items-center group transition-all focus-within:ring-2 ring-blue-500/20">
                 <input 
                   className="flex-1 px-8 py-4 outline-none text-lg serif italic bg-transparent" 
                   placeholder="Zoek een stad of dorp..." 
@@ -185,17 +181,13 @@ const App: React.FC = () => {
               <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">{loading ? 'Curator analyseert...' : 'Curator selectie nabij'}</span>
                 <p className="text-3xl font-bold serif text-stone-800 italic uppercase leading-none mt-1">{resolvedLocation}</p>
-                {!loading && <span className="text-[9px] text-stone-400 font-bold uppercase tracking-wider mt-2 block">Top 12 beeldenparken & publieke kunsticonen (50 km)</span>}
               </div>
               <button onClick={resetSearch} className="text-[10px] font-black uppercase text-stone-400 hover:text-blue-600 px-5 py-2.5 border border-stone-100 rounded-full transition-all bg-white hover:bg-stone-50">Andere plek</button>
             </div>
 
             {loading && (
               <div className="flex flex-col items-center py-32 gap-6 animate-pulse text-center">
-                <div className="relative">
-                  <div className="w-16 h-16 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                  <i className="fas fa-feather-pointed absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-blue-600"></i>
-                </div>
+                <div className="w-16 h-16 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
                 <p className="text-stone-400 serif italic text-xl tracking-wide max-w-sm">De AI Curator stelt een top 12 van kunstlocaties samen...</p>
               </div>
             )}
@@ -212,7 +204,16 @@ const App: React.FC = () => {
               </div>
             )}
 
-            {!loading && visibleParks.length > 0 ? (
+            {error ? (
+              <div className="p-16 bg-white rounded-[3rem] text-center max-w-xl mx-auto shadow-sm border border-stone-100">
+                <div className="w-16 h-16 bg-red-50 text-red-400 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <i className="fas fa-triangle-exclamation text-2xl"></i>
+                </div>
+                <h3 className="text-2xl font-bold serif italic mb-2">Service Tijdelijk Beperkt</h3>
+                <p className="text-stone-500 mb-8">{error}</p>
+                <button onClick={() => performSearch(searchTerm)} className="bg-stone-900 text-white px-12 py-4 rounded-full text-xs font-black uppercase hover:bg-blue-600 transition-all">Probeer Opnieuw</button>
+              </div>
+            ) : !loading && visibleParks.length > 0 ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {visibleParks.map((p, idx) => (
                   <div key={p.id} className="animate-in fade-in slide-in-from-bottom-4 duration-500" style={{ animationDelay: `${idx * 50}ms` }}>
@@ -220,32 +221,15 @@ const App: React.FC = () => {
                   </div>
                 ))}
               </div>
-            ) : !loading && !error && (
+            ) : !loading && hasSearched && (
               <div className="text-center py-24 bg-white rounded-[3rem] border border-stone-100 shadow-inner">
-                <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-6 text-stone-300">
-                  <i className="fas fa-search-location text-2xl"></i>
-                </div>
                 <p className="text-stone-400 serif italic text-xl">Geen kunstlocaties gevonden binnen {SEARCH_RADIUS_KM} km.</p>
-                <button onClick={resetSearch} className="mt-6 text-[10px] font-black uppercase tracking-widest text-blue-600 hover:underline">Verruim je zoekopdracht</button>
-              </div>
-            )}
-            
-            {error && (
-              <div className="p-16 bg-white rounded-[3rem] text-center max-w-xl mx-auto shadow-sm border border-stone-100">
-                <div className="w-16 h-16 bg-stone-50 rounded-full flex items-center justify-center mx-auto mb-6 text-stone-300">
-                  <i className="fas fa-map-pin text-2xl"></i>
-                </div>
-                <h3 className="text-2xl font-bold serif italic mb-2">Oeps...</h3>
-                <p className="text-stone-500 mb-8">{error}</p>
-                <button onClick={resetSearch} className="bg-stone-900 text-white px-12 py-4 rounded-full text-xs font-black uppercase hover:bg-blue-600 transition-all">Probeer een andere stad</button>
               </div>
             )}
           </div>
         )}
-
         <ArtistExpert isVisible={hasSearched} />
       </main>
-
       {selectedPark && <ParkDetail park={selectedPark} onClose={() => setSelectedPark(null)} />}
     </div>
   );
