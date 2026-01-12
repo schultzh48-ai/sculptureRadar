@@ -2,16 +2,25 @@ import { GoogleGenAI } from "@google/genai";
 
 const MODEL_NAME = 'gemini-3-flash-preview';
 
+/**
+ * Haalt de API-sleutel op op de juiste manier voor Vite en Vercel.
+ */
 function getApiKey(): string {
-  const key = (typeof process !== 'undefined' && process.env ? (process.env.VITE_API_KEY || process.env.API_KEY) : null) 
-              || (window as any).VITE_API_KEY 
-              || "";
+  // In Vite/Vercel omgevingen gebruik je import.meta.env voor client-side variabelen.
+  // Zorg dat de variabele in Vercel 'VITE_API_KEY' heet.
+  const key = (import.meta as any).env?.VITE_API_KEY || 
+              (typeof process !== 'undefined' && process.env ? (process.env.VITE_API_KEY || process.env.API_KEY) : "") ||
+              (window as any).VITE_API_KEY || 
+              "";
   return key;
 }
 
 function getAIInstance() {
   const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING");
+  if (!apiKey) {
+    console.error("DEBUG: API Key is leeg. Controleer of VITE_API_KEY in Vercel staat.");
+    throw new Error("API_KEY_MISSING");
+  }
   return new GoogleGenAI({ apiKey });
 }
 
