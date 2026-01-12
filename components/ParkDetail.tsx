@@ -34,12 +34,17 @@ export const ParkDetail: React.FC<ParkDetailProps> = ({ park, onClose }) => {
   };
 
   const getNavigationUrl = () => {
-    const destination = `${park.lat},${park.lng}`;
-    const destinationName = encodeURIComponent(park.name);
-    let url = `https://www.google.com/maps/dir/?api=1&destination=${destination}&destination_place_id=${destinationName}`;
+    const destLat = park.lat;
+    const destLng = park.lng;
+    
+    // Google Maps URL format voor route:
+    // https://www.google.com/maps/dir/?api=1&destination=LAT,LNG&origin=LAT,LNG
+    let url = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`;
+    
     if (park.searchOrigin) {
       url += `&origin=${park.searchOrigin.lat},${park.searchOrigin.lng}`;
     }
+    
     return url;
   };
   

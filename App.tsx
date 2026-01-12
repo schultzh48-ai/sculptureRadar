@@ -32,7 +32,6 @@ const App: React.FC = () => {
   const [searchCoordinates, setSearchCoordinates] = useState<{lat: number, lng: number} | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [quotaReached, setQuotaReached] = useState(false);
 
   const resetSearch = useCallback(() => {
     setHasSearched(false);
@@ -40,7 +39,6 @@ const App: React.FC = () => {
     setAiParks([]);
     setCuratorNote('');
     setError(null);
-    setQuotaReached(false);
     setSearchCoordinates(null);
     setResolvedLocation('');
   }, []);
@@ -49,14 +47,11 @@ const App: React.FC = () => {
     const trimmedQuery = query.trim().toLowerCase();
     if (!trimmedQuery && !coords) return;
     
-    // BIJ NIEUWE ZOEKOPDRACHT: Alles direct wissen voor een schone lei
     setAiParks([]);
     setCuratorNote('');
     setResolvedLocation('');
     setSearchCoordinates(null);
     setError(null);
-    setQuotaReached(false);
-    
     setHasSearched(true);
     setLoading(true);
     
@@ -65,8 +60,7 @@ const App: React.FC = () => {
       
       const localMatch = INITIAL_PARKS.find(p => 
         p.location.toLowerCase().includes(trimmedQuery) || 
-        p.name.toLowerCase().includes(trimmedQuery) ||
-        (p.region && p.region.toLowerCase().includes(trimmedQuery))
+        p.name.toLowerCase().includes(trimmedQuery)
       );
       
       if (coords) {
@@ -76,7 +70,7 @@ const App: React.FC = () => {
       } else if (localMatch && trimmedQuery.length > 2) {
         lat = localMatch.lat;
         lng = localMatch.lng;
-        name = localMatch.region || localMatch.location;
+        name = localMatch.location;
       } else {
         const geo = await getGeocode(trimmedQuery);
         if (!geo) throw new Error("Locatie niet gevonden.");
@@ -104,8 +98,7 @@ const App: React.FC = () => {
         })).filter((p: any) => p.name && !isNaN(p.lat));
         setAiParks(mapped);
         setLoading(false);
-      }).catch(aiError => {
-        if (aiError.message === "QUOTA_EXCEEDED") setQuotaReached(true);
+      }).catch(() => {
         setLoading(false);
       });
 
@@ -131,27 +124,37 @@ const App: React.FC = () => {
     );
   };
 
+  const handleParkSelection = (park: SculpturePark) => {
+    // Voeg de zoekcoördinaten toe aan het geselecteerde park voor de routeplanner
+    setSelectedPark({
+      ...park,
+      searchOrigin: searchCoordinates
+    });
+  };
+
   const visibleParks = useMemo(() => {
-    if (!searchCoordinates) return INITIAL_PARKS.slice(0, MAX_VISIBLE_ITEMS);
+    if (!searchCoordinates) {
+      return INITIAL_PARKS.slice(0, MAX_VISIBLE_ITEMS);
+    }
 
     const allCandidates = [...INITIAL_PARKS, ...aiParks];
-    const unique: any[] = [];
+    const results: any[] = [];
     
     allCandidates.forEach(candidate => {
       const distToSearch = getPreciseDistance(searchCoordinates.lat, searchCoordinates.lng, candidate.lat, candidate.lng);
       
       if (distToSearch <= SEARCH_RADIUS_KM) {
-        const isDuplicate = unique.some(existing => {
+        const isDuplicate = results.some(existing => {
           const distBetween = getPreciseDistance(candidate.lat, candidate.lng, existing.lat, existing.lng);
           return distBetween < DUPLICATE_THRESHOLD_KM;
         });
         if (!isDuplicate) {
-          unique.push({ ...candidate, distance: distToSearch });
+          results.push({ ...candidate, distance: distToSearch });
         }
       }
     });
 
-    return unique.sort((a, b) => a.distance - b.distance).slice(0, MAX_VISIBLE_ITEMS);
+    return results.sort((a, b) => a.distance - b.distance).slice(0, MAX_VISIBLE_ITEMS);
   }, [aiParks, searchCoordinates]);
 
   return (
@@ -217,7 +220,7 @@ const App: React.FC = () => {
               <div className="flex-1">
                 <div className="flex items-center gap-4 mb-1">
                   <span className="text-[10px] font-black uppercase tracking-widest text-blue-600">
-                    {loading ? 'AI Curator analyseert de omgeving...' : 'Resultaten binnen 50 km'}
+                    {loading ? 'AI Curator analyseert de omgeving...' : `Top ${MAX_VISIBLE_ITEMS} resultaten binnen 50 km`}
                   </span>
                 </div>
                 <div className="flex items-center gap-6">
@@ -252,7 +255,7 @@ const App: React.FC = () => {
           {visibleParks.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {visibleParks.map((p) => (
-                <ParkCard key={p.id} park={p} onClick={setSelectedPark} />
+                <ParkCard key={p.id} park={p} onClick={handleParkSelection} />
               ))}
             </div>
           ) : hasSearched && !loading && (
