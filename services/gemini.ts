@@ -1,28 +1,35 @@
-
 import { GoogleGenAI } from "@google/genai";
 
 const MODEL_NAME = 'gemini-3-flash-preview';
 
 function getApiKey(): string {
-  return process.env.API_KEY || "";
+  const key = (typeof process !== 'undefined' && process.env ? (process.env.VITE_API_KEY || process.env.API_KEY) : null) 
+              || (window as any).VITE_API_KEY 
+              || "";
+  return key;
 }
 
-const ai = new GoogleGenAI({ apiKey: getApiKey() });
+function getAIInstance() {
+  const apiKey = getApiKey();
+  if (!apiKey) throw new Error("API_KEY_MISSING");
+  return new GoogleGenAI({ apiKey });
+}
 
-/**
- * Generieke helper voor API calls met retry-logica voor 429/500 fouten.
- */
-async function safeGenerateContent(params: any, retries = 3, delay = 2000): Promise<any> {
+async function safeGenerateContent(params: any, retries = 2, delay = 2000): Promise<any> {
   try {
+    const ai = getAIInstance();
     const response = await ai.models.generateContent(params);
     return response;
   } catch (error: any) {
-    const isQuotaError = error?.message?.includes('429') || error?.message?.includes('exceeded quota');
+    const errorMsg = error?.message?.toLowerCase() || "";
+    const isQuotaError = errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('limit');
+    
     if (isQuotaError && retries > 0) {
-      console.warn(`Quota bereikt. Poging opnieuw over ${delay}ms... (Nog ${retries} over)`);
       await new Promise(resolve => setTimeout(resolve, delay));
-      return safeGenerateContent(params, retries - 1, delay * 2);
+      return safeGenerateContent(params, retries - 1, delay * 1.5);
     }
+    
+    if (isQuotaError) throw new Error("QUOTA_EXCEEDED");
     throw error;
   }
 }
@@ -31,42 +38,36 @@ export async function getGeocode(query: string): Promise<{ lat: number, lng: num
   try {
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `Bepaal de coördinaten voor de plaats: "${query}". Antwoord uitsluitend in JSON: {"lat": getal, "lng": getal, "name": "Geformatteerde Naam"}.`,
-      config: { 
-        responseMimeType: "application/json", 
-        temperature: 0.1 
-      }
+      contents: `Bepaal coördinaten voor: "${query}". Antwoord ALLEEN met JSON: {"lat": getal, "lng": getal, "name": "Stad, Land"}.`,
+      config: { responseMimeType: "application/json", temperature: 0.1 }
     });
-    return JSON.parse(response.text || "null");
-  } catch {
-    return null;
+    return response.text ? JSON.parse(response.text) : null;
+  } catch (err) {
+    console.error("Geocode error:", err);
+    throw err;
   }
 }
 
 export async function searchParksWithCurator(lat: number, lng: number, locationName: string) {
   try {
-    const systemInstruction = `Je bent de Senior AI Curator van SculptuurRadar. 
-    Taak 1: Vind beeldenparken en publieke kunsticonen STRIKT binnen 50 km rondom ${locationName}.
-    Taak 2: Selecteer de MAXIMAAL 12 meest relevante locaties.
-    JSON STRUCTUUR: {"curatorIntro": "...", "parks": [{"name": "...", "location": "...", "desc": "...", "lat": 0.0, "lng": 0.0, "isSolitary": true/false, "isInteractive": true/false, "url": "..."}]}`;
+    const systemInstruction = `Je bent een Senior Kunst-Curator. Zoek ECHTE beeldenparken en publieke kunstlocaties binnen 50km van de coördinaten van ${locationName}. Gebruik Google Search voor actuele locaties. 
+    JSON OUTPUT: {"curatorIntro": "Korte samenvatting van het kunstaanbod in deze regio", "parks": [{"name": "Naam", "location": "Plaats", "desc": "Korte feitelijke beschrijving", "lat": 0.0, "lng": 0.0, "isSolitary": boolean, "isInteractive": boolean, "url": "website"}]}`;
 
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `Analyseer kunstlocaties binnen 50 km rondom ${locationName}.`,
+      contents: `Identificeer kunstparken en sculpturen nabij ${locationName} (${lat}, ${lng}).`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         systemInstruction,
-        temperature: 0.2
+        temperature: 0.1
       },
     });
     
-    return JSON.parse(response.text || "{\"parks\": [], \"curatorIntro\": \"\"}");
+    return response.text ? JSON.parse(response.text) : {"parks": [], "curatorIntro": ""};
   } catch (error: any) {
-    if (error?.message?.includes('429')) {
-      return { error: "De AI provider heeft een tijdelijke limiet bereikt. Probeer het over een minuutje weer." };
-    }
-    return { error: error.message };
+    console.error("AI Search failed:", error.message);
+    throw error;
   }
 }
 
@@ -74,19 +75,19 @@ export async function askArtistExpert(question: string) {
   try {
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `Onderzoek: "${question}"`,
+      contents: `Vraag: "${question}"`,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "Je bent een integere kunsthistoricus. Focus op historische accuraatheid.",
+        systemInstruction: "Je bent een kunsthistoricus. Geef een beknopt en feitelijk antwoord.",
         temperature: 0.1,
       }
     });
-
-    const text = response.text || "Geen antwoord gevonden.";
-    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-    return { text, sources };
-  } catch (error: any) {
-    return { text: "De expert is momenteel overbezet door te veel aanvragen. Probeer het zo meteen nog eens.", sources: [] };
+    return { 
+      text: response.text || "Geen antwoord gevonden.", 
+      sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] 
+    };
+  } catch {
+    return { text: "De expert is momenteel niet bereikbaar.", sources: [] };
   }
 }
 
@@ -94,15 +95,11 @@ export async function getDeepDive(artworkName: string, location: string) {
   try {
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `Geef diepgang over "${artworkName}" in "${location}".`,
-      config: { 
-        tools: [{ googleSearch: {} }],
-        maxOutputTokens: 800,
-        temperature: 0.2 
-      }
+      contents: `Analyseer "${artworkName}" in "${location}". Focus op de kunstenaar en de context.`,
+      config: { tools: [{ googleSearch: {} }], temperature: 0.2 }
     });
     return response.text || "";
   } catch {
-    return "De details konden niet worden opgehaald wegens drukte bij de AI-service.";
+    return "Details konden niet worden geladen.";
   }
 }
