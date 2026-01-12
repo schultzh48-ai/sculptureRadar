@@ -1,13 +1,9 @@
+
 import { GoogleGenAI } from "@google/genai";
 
 const MODEL_NAME = 'gemini-3-flash-preview';
 
-/**
- * Haalt de API-sleutel op op de juiste manier voor Vite en Vercel.
- */
 function getApiKey(): string {
-  // In Vite/Vercel omgevingen gebruik je import.meta.env voor client-side variabelen.
-  // Zorg dat de variabele in Vercel 'VITE_API_KEY' heet.
   const key = (import.meta as any).env?.VITE_API_KEY || 
               (typeof process !== 'undefined' && process.env ? (process.env.VITE_API_KEY || process.env.API_KEY) : "") ||
               (window as any).VITE_API_KEY || 
@@ -17,27 +13,22 @@ function getApiKey(): string {
 
 function getAIInstance() {
   const apiKey = getApiKey();
-  if (!apiKey) {
-    console.error("DEBUG: API Key is leeg. Controleer of VITE_API_KEY in Vercel staat.");
-    throw new Error("API_KEY_MISSING");
-  }
+  if (!apiKey) throw new Error("API_KEY_MISSING");
   return new GoogleGenAI({ apiKey });
 }
 
-async function safeGenerateContent(params: any, retries = 2, delay = 2000): Promise<any> {
+async function safeGenerateContent(params: any, retries = 1, delay = 1000): Promise<any> {
   try {
     const ai = getAIInstance();
     const response = await ai.models.generateContent(params);
     return response;
   } catch (error: any) {
     const errorMsg = error?.message?.toLowerCase() || "";
-    const isQuotaError = errorMsg.includes('429') || errorMsg.includes('quota') || errorMsg.includes('limit');
-    
+    const isQuotaError = errorMsg.includes('429') || errorMsg.includes('quota');
     if (isQuotaError && retries > 0) {
       await new Promise(resolve => setTimeout(resolve, delay));
-      return safeGenerateContent(params, retries - 1, delay * 1.5);
+      return safeGenerateContent(params, retries - 1, delay * 2);
     }
-    
     if (isQuotaError) throw new Error("QUOTA_EXCEEDED");
     throw error;
   }
@@ -47,24 +38,21 @@ export async function getGeocode(query: string): Promise<{ lat: number, lng: num
   try {
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `Bepaal coördinaten voor: "${query}". Antwoord ALLEEN met JSON: {"lat": getal, "lng": getal, "name": "Stad, Land"}.`,
-      config: { responseMimeType: "application/json", temperature: 0.1 }
+      contents: `Coördinaten voor "${query}". Alleen JSON: {"lat": num, "lng": num, "name": "Stad"}`,
+      config: { responseMimeType: "application/json", temperature: 0 }
     });
     return response.text ? JSON.parse(response.text) : null;
-  } catch (err) {
-    console.error("Geocode error:", err);
-    throw err;
-  }
+  } catch { return null; }
 }
 
 export async function searchParksWithCurator(lat: number, lng: number, locationName: string) {
   try {
-    const systemInstruction = `Je bent een Senior Kunst-Curator. Zoek ECHTE beeldenparken en publieke kunstlocaties binnen 50km van de coördinaten van ${locationName}. Gebruik Google Search voor actuele locaties. 
-    JSON OUTPUT: {"curatorIntro": "Korte samenvatting van het kunstaanbod in deze regio", "parks": [{"name": "Naam", "location": "Plaats", "desc": "Korte feitelijke beschrijving", "lat": 0.0, "lng": 0.0, "isSolitary": boolean, "isInteractive": boolean, "url": "website"}]}`;
+    const systemInstruction = `Senior Curator. Zoek ECHTE beeldenparken binnen 50km van ${locationName}. Gebruik Google Search. 
+    JSON: {"curatorIntro": "1 korte zin", "parks": [{"name": "Naam", "location": "Stad", "desc": "1 zin", "lat": 0.0, "lng": 0.0, "isSolitary": bool, "isInteractive": bool, "url": "url"}]}`;
 
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `Identificeer kunstparken en sculpturen nabij ${locationName} (${lat}, ${lng}).`,
+      contents: `Kunstparken nabij ${locationName}.`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
@@ -72,12 +60,8 @@ export async function searchParksWithCurator(lat: number, lng: number, locationN
         temperature: 0.1
       },
     });
-    
-    return response.text ? JSON.parse(response.text) : {"parks": [], "curatorIntro": ""};
-  } catch (error: any) {
-    console.error("AI Search failed:", error.message);
-    throw error;
-  }
+    return response.text ? JSON.parse(response.text) : {"parks": []};
+  } catch (error) { throw error; }
 }
 
 export async function askArtistExpert(question: string) {
@@ -87,28 +71,24 @@ export async function askArtistExpert(question: string) {
       contents: `Vraag: "${question}"`,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "Je bent een kunsthistoricus. Geef een beknopt en feitelijk antwoord.",
+        systemInstruction: "Antwoord feitelijk en kort.",
         temperature: 0.1,
       }
     });
     return { 
-      text: response.text || "Geen antwoord gevonden.", 
+      text: response.text || "Geen antwoord.", 
       sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] 
     };
-  } catch {
-    return { text: "De expert is momenteel niet bereikbaar.", sources: [] };
-  }
+  } catch { return { text: "Expert offline.", sources: [] }; }
 }
 
 export async function getDeepDive(artworkName: string, location: string) {
   try {
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `Analyseer "${artworkName}" in "${location}". Focus op de kunstenaar en de context.`,
+      contents: `Context over "${artworkName}" in "${location}". Max 100 woorden.`,
       config: { tools: [{ googleSearch: {} }], temperature: 0.2 }
     });
     return response.text || "";
-  } catch {
-    return "Details konden niet worden geladen.";
-  }
+  } catch { return "Details niet beschikbaar."; }
 }
