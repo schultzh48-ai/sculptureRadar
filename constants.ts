@@ -2,7 +2,12 @@
 import { SculpturePark } from './types';
 
 export const INITIAL_PARKS: SculpturePark[] = [
-  // --- SPANJE: DE ULTIEME COLLECTIE (50 locaties) ---
+  // --- BAMBERG SPECIALS ---
+  { id: 'de-bam-01', name: 'Bamberger Skulpturenweg', location: 'Bamberg Centrum', region: 'Duitsland', lat: 49.8917, lng: 10.8864, website: '#', shortDescription: 'De klassieke route door de UNESCO binnenstad met internationale meesters als Botero.' },
+  { id: 'de-bam-03', name: 'Main-Donau Skulpturenweg', location: 'Bamberg Kanaal', region: 'Duitsland', lat: 49.8820, lng: 10.9020, website: '#', shortDescription: 'Een 8km lange route langs het kanaal met monumentale werken die inspelen op water en techniek.' },
+  { id: 'de-bam-02', name: 'Villa Dessauer Garden', location: 'Bamberg', region: 'Duitsland', lat: 49.8875, lng: 10.8922, website: '#', shortDescription: 'Wisselende hedendaagse exposities in de tuin van deze prachtige stadsvilla.' },
+
+  // --- SPANJE: DE ULTIEME COLLECTIE ---
   { id: 'es-01', name: 'Museo Lagomar', location: 'Nazaret (Lanzarote)', region: 'Spanje', lat: 29.0350, lng: -13.5656, website: '#', shortDescription: 'Architectuur en kunst in vulkanische grotten.' },
   { id: 'es-02', name: 'Jardín de Cactus', location: 'Guatiza (Lanzarote)', region: 'Spanje', lat: 29.0560, lng: -13.4862, website: '#', shortDescription: 'Cactus-tuin met monumentale sculpturen van Manrique.' },
   { id: 'es-03', name: 'Chillida Leku', location: 'Hernani', region: 'Spanje', lat: 43.2383, lng: -1.9847, website: '#', shortDescription: 'Levenswerk van Eduardo Chillida.' },
@@ -30,10 +35,8 @@ export const INITIAL_PARKS: SculpturePark[] = [
   { id: 'es-40', name: 'Guggenheim Garden', location: 'Bilbao', region: 'Spanje', lat: 43.2686, lng: -2.9342, website: '#', shortDescription: 'Beroemde werken van Koons en Bourgeois.' },
   { id: 'es-41', name: 'Euskadi Park', location: 'Bilbao', region: 'Spanje', lat: 43.2680, lng: -2.9380, website: '#', shortDescription: 'Beelden van Chillida en Serra.' },
   { id: 'es-48', name: 'Miró Park', location: 'Barcelona', region: 'Spanje', lat: 41.3772, lng: 2.1469, website: '#', shortDescription: 'Met het gigantische "Vrouw en Vogel" beeld.' },
-  
-  // --- DUITSLAND: DE VOLLEDIGE ROUTE (30 locaties) ---
-  { id: 'de-bam-01', name: 'Bamberger Skulpturenweg', location: 'Bamberg', region: 'Duitsland', lat: 49.8917, lng: 10.8864, website: '#', shortDescription: 'Route door UNESCO stad met wereldberoemde werken.' },
-  { id: 'de-bam-02', name: 'Villa Dessauer Garden', location: 'Bamberg', region: 'Duitsland', lat: 49.8875, lng: 10.8922, website: '#', shortDescription: 'Hedendaagse kunst in museumtuin.' },
+
+  // --- DUITSLAND: OVERIG ---
   { id: 'de-nur-01', name: 'Neurenberg Zwinger', location: 'Neurenberg', region: 'Duitsland', lat: 49.4478, lng: 11.0822, website: '#', shortDescription: 'Beeldenpark aan de stadsmuur.' },
   { id: 'de-ulm-01', name: 'Donaupark Ulm', location: 'Ulm', region: 'Duitsland', lat: 48.4011, lng: 9.9919, website: '#', shortDescription: 'Moderne sculptuur aan de Donau.' },
   { id: 'de-mun-01', name: 'Pinakothek Garden', location: 'München', region: 'Duitsland', lat: 48.1472, lng: 11.5722, website: '#', shortDescription: 'Topstukken uit de moderne kunstgeschiedenis.' },
@@ -46,7 +49,7 @@ export const INITIAL_PARKS: SculpturePark[] = [
   { id: 'de-dr-01', name: 'Zwinger Garden', location: 'Dresden', region: 'Duitsland', lat: 51.0531, lng: 13.7339, website: '#', shortDescription: 'Barokke beeldhouwkunst.' },
   { id: 'de-bi-01', name: 'Kunsthalle Bielefeld Garden', location: 'Bielefeld', region: 'Duitsland', lat: 52.0200, lng: 8.5250, website: '#', shortDescription: 'Topwerken van Moore en Rodin.' },
 
-  // --- NEDERLAND & BELGIË (30 locaties) ---
+  // --- NEDERLAND & BELGIË ---
   { id: 'nl-01', name: 'Kröller-Müller', location: 'Otterlo', region: 'Nederland', lat: 52.0951, lng: 5.8197, website: '#', shortDescription: 'Iconische tuin op de Veluwe.' },
   { id: 'nl-02', name: 'De Groene Kathedraal', location: 'Almere', region: 'Nederland', lat: 52.3217, lng: 5.3200, website: '#', shortDescription: 'Levende land-art.' },
   { id: 'nl-03', name: 'Observatorium', location: 'Lelystad', region: 'Nederland', lat: 52.5511, lng: 5.5564, website: '#', shortDescription: 'Robert Morris land-art.' },
@@ -62,14 +65,14 @@ export const INITIAL_PARKS: SculpturePark[] = [
   { id: 'be-06', name: 'Sart Tilman', location: 'Luik', region: 'België', lat: 50.5833, lng: 5.5667, website: '#', shortDescription: 'Openluchtmuseum op de campus.' },
   { id: 'be-10', name: 'Beaufort Permanent', location: 'Belgische Kust', region: 'België', lat: 51.2000, lng: 3.0000, website: '#', shortDescription: 'Kunst langs de kustlijn.' },
 
-  // --- FRANKRIJK & ITALIË (30 locaties) ---
+  // --- FRANKRIJK & ITALIË ---
   { id: 'fr-01', name: 'Château La Coste', location: 'Provence', region: 'Frankrijk', lat: 43.6475, lng: 5.4950, website: '#', shortDescription: 'Toparchitectuur en kunst.' },
   { id: 'fr-02', name: 'Maeght Foundation', location: 'Saint-Paul-de-Vence', region: 'Frankrijk', lat: 43.7008, lng: 7.1147, website: '#', shortDescription: 'Legendarische tuin met Miró.' },
   { id: 'fr-03', name: 'Musée de la Sculpture', location: 'Parijs', region: 'Frankrijk', lat: 48.8475, lng: 2.3614, website: '#', shortDescription: 'Beelden aan de Seine.' },
   { id: 'it-01', name: 'Arte Sella', location: 'Borgo Valsugana', region: 'Italië', lat: 46.0125, lng: 11.5238, website: '#', shortDescription: 'Natuur en kunst in de Alpen.' },
   { id: 'it-02', name: 'Giardino dei Tarocchi', location: 'Capalbio', region: 'Italië', lat: 42.4248, lng: 11.4667, website: '#', shortDescription: 'Kleurrijk park van Niki de Saint Phalle.' },
   
-  // --- GENERIEKE AANVULLING VOOR 150+ (70 extra items) ---
+  // --- GENERIEKE AANVULLING VOOR 150+ ---
   ...Array.from({ length: 94 }).map((_, i) => ({
     id: `gen-${i}`,
     name: `Beeldenpark ${['Catalonië', 'Andalusië', 'Beieren', 'Toscane', 'Provence', 'Bretagne', 'Vlaanderen', 'Friesland'][i % 8]} Speciaal #${i + 1}`,
