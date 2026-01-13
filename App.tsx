@@ -7,8 +7,9 @@ import { ArtistExpert } from './components/ArtistExpert';
 import { getGeocode, searchParksWithCurator } from './services/gemini';
 import { INITIAL_PARKS } from './constants';
 
-const SEARCH_RADIUS_KM = 75; 
-const DUPLICATE_THRESHOLD_KM = 1.0;
+// Strikte straal van 50km zoals gevraagd
+const SEARCH_RADIUS_KM = 50; 
+const DUPLICATE_THRESHOLD_KM = 2.0;
 
 function getPreciseDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 9999;
@@ -61,14 +62,16 @@ const App: React.FC = () => {
         lng = coords.lng;
         name = "Huidige Locatie";
       } else {
+        // We gebruiken Gemini om de plaatsnaam ALTIJD om te zetten naar coördinaten
         const geo = await getGeocode(trimmedQuery);
         if (geo) {
           lat = geo.lat;
           lng = geo.lng;
           name = geo.name;
         } else {
-          lat = 0; lng = 0;
-          name = trimmedQuery;
+          setError("Plaatsnaam niet gevonden. Probeer een andere stad.");
+          setLoading(false);
+          return;
         }
       }
 
@@ -103,12 +106,12 @@ const App: React.FC = () => {
             return [...prev, ...filteredNewParks];
           });
         } catch (err) {
-          console.warn("AI Search failed");
+          console.warn("AI Curator failed to fetch new data, using local storage.");
         }
       }
       setLoading(false);
     } catch (e: any) {
-      setError("Fout bij laden.");
+      setError("Er ging iets mis bij het zoeken.");
       setLoading(false);
     }
   }, []);
@@ -129,30 +132,16 @@ const App: React.FC = () => {
   };
 
   const searchResults = useMemo(() => {
-    if (!hasSearched) return [];
-    const query = searchTerm.toLowerCase().trim();
-    const resolvedCity = resolvedLocation.toLowerCase().trim();
+    if (!hasSearched || !searchCoordinates) return [];
 
+    // Filter uitsluitend op geografische afstand tot de gezochte plek
     return allParks.map(p => {
-      const distance = searchCoordinates 
-        ? getPreciseDistance(searchCoordinates.lat, searchCoordinates.lng, p.lat, p.lng)
-        : 9999;
-      
-      const textMatch = query.length > 0 && (
-        p.name.toLowerCase().includes(query) || 
-        p.location.toLowerCase().includes(query) || 
-        (p.region && p.region.toLowerCase().includes(query))
-      );
-      const locationMatch = resolvedCity.length > 0 && (
-        p.location.toLowerCase().includes(resolvedCity) ||
-        (p.region && p.region.toLowerCase().includes(resolvedCity))
-      );
-      const nearbyMatch = distance <= SEARCH_RADIUS_KM;
-      return { ...p, distance, isMatch: textMatch || locationMatch || nearbyMatch };
+      const distance = getPreciseDistance(searchCoordinates.lat, searchCoordinates.lng, p.lat, p.lng);
+      return { ...p, distance, isMatch: distance <= SEARCH_RADIUS_KM };
     })
     .filter(p => p.isMatch)
     .sort((a, b) => (a.distance || 0) - (b.distance || 0));
-  }, [allParks, searchCoordinates, searchTerm, resolvedLocation, hasSearched]);
+  }, [allParks, searchCoordinates, hasSearched]);
 
   return (
     <div className="min-h-screen bg-[#fbfbf9] text-stone-900 text-sm">
@@ -174,7 +163,7 @@ const App: React.FC = () => {
             </div>
             {hasSearched && (
               <button onClick={resetSearch} className="text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-stone-900 transition-colors flex items-center gap-2">
-                <i className="fas fa-rotate-left"></i> Nieuw
+                <i className="fas fa-rotate-left"></i> Opnieuw
               </button>
             )}
           </div>
@@ -186,7 +175,7 @@ const App: React.FC = () => {
           {!hasSearched && (
             <div className="space-y-4 mb-10 animate-in fade-in slide-in-from-top-4 duration-1000">
               <h2 className="text-5xl md:text-6xl font-bold serif leading-tight tracking-tight">Vind kunst in de <span className="text-blue-600 italic underline decoration-blue-100 underline-offset-8">vrije natuur.</span></h2>
-              <p className="text-stone-500 text-lg serif italic">Zoek op stad, regio of land (Spanje, Duitsland, Bamberg, NL).</p>
+              <p className="text-stone-500 text-lg serif italic">Typ een plaatsnaam om parken binnen een straal van 50km te vinden.</p>
             </div>
           )}
           
@@ -194,7 +183,7 @@ const App: React.FC = () => {
             <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl border border-stone-100 flex items-center group transition-all focus-within:ring-2 ring-blue-500/20 max-w-xl mx-auto">
               <input 
                 className="flex-1 px-8 py-4 outline-none text-lg serif italic bg-transparent" 
-                placeholder="Typ een plaatsnaam..." 
+                placeholder="Zoek stad of regio..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && performSearch(searchTerm)}
@@ -210,7 +199,7 @@ const App: React.FC = () => {
             {!hasSearched && (
               <button onClick={handleGPS} disabled={isLocating} className="text-stone-400 hover:text-blue-600 font-bold uppercase text-[10px] tracking-widest flex items-center gap-2 mx-auto transition-all">
                 <i className={`fas fa-location-arrow ${isLocating ? 'animate-bounce' : ''}`}></i> 
-                {isLocating ? 'Bepalen...' : 'Gebruik mijn GPS'}
+                {isLocating ? 'Bepalen...' : 'Gebruik huidige locatie'}
               </button>
             )}
             {error && <p className="text-red-500 text-xs font-bold uppercase tracking-widest">{error}</p>}
@@ -221,12 +210,16 @@ const App: React.FC = () => {
           <div className="space-y-12 animate-in fade-in duration-500">
             <div className="flex items-center justify-between border-b border-stone-100 pb-6">
               <div className="flex-1 text-left">
-                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-1 block">Resultaten voor</span>
-                <p className="text-3xl font-bold serif text-stone-800 italic uppercase leading-none">{resolvedLocation || searchTerm}</p>
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-1 block">
+                  {searchResults.length} {searchResults.length === 1 ? 'locatie' : 'locaties'} binnen 50km van
+                </span>
+                <p className="text-3xl font-bold serif text-stone-800 italic uppercase leading-none">
+                  {resolvedLocation || searchTerm}
+                </p>
               </div>
               {loading && (
                 <div className="flex items-center gap-3 text-blue-400">
-                  <span className="text-[10px] font-black uppercase tracking-widest animate-pulse">Curator doorzoekt archieven...</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest animate-pulse">De Curator verifieert locaties...</span>
                   <i className="fas fa-sparkles animate-spin text-xs"></i>
                 </div>
               )}
@@ -237,7 +230,6 @@ const App: React.FC = () => {
                 <ParkCard 
                   key={p.id} 
                   park={p} 
-                  // CRITICAL FIX: Geef de huidige zoek-coördinaten altijd mee als vertrekpunt
                   onClick={(parkData) => setSelectedPark({...parkData, searchOrigin: searchCoordinates})} 
                 />
               ))}
@@ -245,8 +237,10 @@ const App: React.FC = () => {
 
             {searchResults.length === 0 && !loading && (
               <div className="text-center py-20 bg-stone-50 rounded-[3rem] border border-dashed border-stone-200">
-                <p className="text-stone-400 serif italic text-xl">Geen parken gevonden in deze straal.</p>
-                <button onClick={resetSearch} className="mt-4 text-blue-600 font-black uppercase text-[10px] tracking-widest hover:underline">Terug naar start</button>
+                <i className="fas fa-map-marked-alt text-3xl text-stone-200 mb-4 block"></i>
+                <p className="text-stone-400 serif italic text-xl">Geen parken gevonden binnen de straal van 50km.</p>
+                <p className="text-stone-400 text-xs mt-2">Probeer een grotere stad of regio die als middelpunt kan dienen.</p>
+                <button onClick={resetSearch} className="mt-6 text-blue-600 font-black uppercase text-[10px] tracking-widest hover:underline">Terug naar start</button>
               </div>
             )}
           </div>
