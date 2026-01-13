@@ -3,56 +3,58 @@ import { GoogleGenAI } from "@google/genai";
 
 const MODEL_NAME = 'gemini-3-flash-preview';
 
-function getApiKey(): string {
-  return process.env.API_KEY || "";
-}
+/**
+ * Hulpmiddel om de API key op te halen.
+ * We geven prioriteit aan VITE_API_KEY zoals afgesproken.
+ */
+const getApiKey = () => {
+  return process.env.VITE_API_KEY || process.env.API_KEY || "";
+};
 
-function getAIInstance() {
-  const apiKey = getApiKey();
-  if (!apiKey) throw new Error("API_KEY_MISSING");
-  return new GoogleGenAI({ apiKey });
-}
-
-// Hulpmiddel voor stabiliteit: we dwingen de AI om minder creatief en meer als een database te denken
-async function safeGenerateContent(params: any, retries = 1): Promise<any> {
+// Hulpmiddel voor stabiliteit en retry-logica
+async function safeGenerateContent(params: any, retries = 2): Promise<any> {
   try {
-    const ai = getAIInstance();
+    const apiKey = getApiKey();
+    if (!apiKey) {
+      throw new Error("VITE_API_KEY is niet geconfigureerd in de omgeving.");
+    }
+
+    const ai = new GoogleGenAI({ apiKey });
     const response = await ai.models.generateContent(params);
+    
+    if (!response || !response.text) {
+      throw new Error("Empty response from Gemini");
+    }
+    
     return response;
   } catch (error: any) {
-    if (retries > 0) return safeGenerateContent(params, retries - 1);
+    console.error(`Gemini Error (Retries left: ${retries}):`, error.message);
+    if (retries > 0) {
+      await new Promise(resolve => setTimeout(resolve, 500));
+      return safeGenerateContent(params, retries - 1);
+    }
     throw error;
   }
 }
 
 export async function getGeocode(query: string): Promise<{ lat: number, lng: number, name: string } | null> {
   try {
-    // Temperature 0.0 is cruciaal voor stabiliteit
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `TAAK: Vertaal de zoekterm naar coördinaten.
+      contents: `Vertaal de volgende zoekterm naar geografische coördinaten. 
       ZOEKTERM: "${query}"
-      INSTRUCTIE: 
-      1. Identificeer de meest waarschijnlijke stad of regio. 
-      2. Corrigeer typefouten (bijv. "Amsterdm" -> "Amsterdam").
-      3. Geef ALTIJD een resultaat als de plek bestaat.
-      OUTPUT: Alleen JSON in dit formaat: {"lat": getal, "lng": getal, "name": "Naam Stad"}`,
+      OUTPUT: Geef alleen een JSON object terug in dit formaat: {"lat": getal, "lng": getal, "name": "Naam van de stad of plek"}`,
       config: { 
         responseMimeType: "application/json", 
-        temperature: 0.0 // 0.0 zorgt dat het antwoord elke keer hetzelfde is
+        temperature: 0.0 
       }
     });
     
-    if (!response.text) return null;
-    const cleanedJson = response.text.replace(/```json|```/g, "").trim();
-    const data = JSON.parse(cleanedJson);
-    
-    // Validatie van data integriteit
+    const data = JSON.parse(response.text.trim());
     if (typeof data.lat !== 'number' || typeof data.lng !== 'number') return null;
-    
     return data;
   } catch (err) { 
-    console.error("Geocoding failed for stability:", err);
+    console.error("Geocode error:", err);
     return null; 
   }
 }
@@ -61,19 +63,18 @@ export async function searchParksWithCurator(lat: number, lng: number, locationN
   try {
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `Geef ECHTE beeldenparken binnen 50km van ${locationName} (${lat}, ${lng}).
-      Focus op gevestigde namen. Geef JSON: {"parks": [{"name": "Naam", "location": "Stad", "desc": "Kort", "lat": 0.0, "lng": 0.0, "url": "url"}]}`,
+      contents: `Zoek naar echte beeldenparken, beeldentuinen of openluchtmusea binnen een straal van 50km rondom ${locationName} (${lat}, ${lng}). 
+      Geef het resultaat terug als JSON: {"parks": [{"name": "Naam van het park", "location": "Plaats", "desc": "Korte omschrijving", "lat": getal, "lng": getal, "url": "officiële website indien bekend"}]}`,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        temperature: 0.0 // Stabiele resultaten
+        temperature: 0.0
       },
     });
     
-    if (!response.text) return {"parks": []};
-    const cleanedJson = response.text.replace(/```json|```/g, "").trim();
-    return JSON.parse(cleanedJson);
-  } catch {
+    return JSON.parse(response.text.trim());
+  } catch (err) {
+    console.error("Search error:", err);
     return {"parks": []};
   }
 }
@@ -85,24 +86,30 @@ export async function askArtistExpert(question: string) {
       contents: question,
       config: {
         tools: [{ googleSearch: {} }],
-        systemInstruction: "Geef een feitelijk antwoord in het Nederlands op basis van de zoekresultaten.",
+        systemInstruction: "Je bent een expert in Europese beeldhouwkunst en land-art. Geef een feitelijk, inspirerend en kort Nederlands antwoord op basis van zoekresultaten.",
         temperature: 0.0
       }
     });
     return { 
-      text: response.text || "Geen antwoord.", 
+      text: response.text || "Geen antwoord beschikbaar.", 
       sources: response.candidates?.[0]?.groundingMetadata?.groundingChunks || [] 
     };
-  } catch { return { text: "Expert offline.", sources: [] }; }
+  } catch (err) { 
+    console.error("Expert error:", err);
+    return { text: "De expert is momenteel niet bereikbaar.", sources: [] }; 
+  }
 }
 
 export async function getDeepDive(artworkName: string, location: string) {
   try {
     const response = await safeGenerateContent({
       model: MODEL_NAME,
-      contents: `Vertel over ${artworkName} in ${location}.`,
-      config: { temperature: 0.1 }
+      contents: `Vertel kort over de kunststroming, de geschiedenis of de specifieke kunstwerken in ${artworkName}, gelegen in ${location}. Focus op wat dit park uniek maakt.`,
+      config: { temperature: 0.2 }
     });
     return response.text || "";
-  } catch { return "Geen info."; }
+  } catch (err) { 
+    console.error("Deep dive error:", err);
+    return "Details konden niet worden geladen."; 
+  }
 }
