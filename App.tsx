@@ -165,8 +165,8 @@ const App: React.FC = () => {
         <div className={`${hasSearched ? 'py-4' : 'py-20'} max-w-2xl mx-auto transition-all duration-500`}>
           {!hasSearched && (
             <div className="mb-10 animate-in fade-in duration-1000">
-              <h2 className="text-5xl md:text-6xl font-black serif leading-tight mb-4 tracking-tight">Beeldenparken in <span className="text-blue-600 italic">Spanje & Europa.</span></h2>
-              <p className="text-stone-500 text-lg serif italic">Zoek op plaatsnaam. Stabiele resultaten binnen 50km.</p>
+              <h2 className="text-5xl md:text-6xl font-black serif leading-tight mb-4 tracking-tight">Sculptuur<span className="text-blue-600 italic">Radar.</span></h2>
+              <p className="text-stone-500 text-lg serif italic">Ontdek beeldenparken en openluchtmusea in Spanje & Europa.</p>
             </div>
           )}
           
