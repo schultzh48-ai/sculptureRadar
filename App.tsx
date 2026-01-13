@@ -7,7 +7,7 @@ import { ArtistExpert } from './components/ArtistExpert';
 import { getGeocode, searchParksWithCurator } from './services/gemini';
 import { INITIAL_PARKS } from './constants';
 
-const SEARCH_RADIUS_KM = 75; // Ruimere straal voor betere regio-dekking
+const SEARCH_RADIUS_KM = 75; 
 const DUPLICATE_THRESHOLD_KM = 1.0;
 
 function getPreciseDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -28,7 +28,6 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   
-  // Start met de volledige INITIAL_PARKS database
   const [allParks, setAllParks] = useState<SculpturePark[]>(INITIAL_PARKS);
   const [dbGrowth, setDbGrowth] = useState(0);
   
@@ -62,14 +61,12 @@ const App: React.FC = () => {
         lng = coords.lng;
         name = "Huidige Locatie";
       } else {
-        // Stap 1: Geocode de locatie (AI)
         const geo = await getGeocode(trimmedQuery);
         if (geo) {
           lat = geo.lat;
           lng = geo.lng;
           name = geo.name;
         } else {
-          // Fallback als geocoding faalt: zoek puur op tekst in onze lokale db
           lat = 0; lng = 0;
           name = trimmedQuery;
         }
@@ -78,7 +75,6 @@ const App: React.FC = () => {
       setSearchCoordinates({ lat, lng });
       setResolvedLocation(name);
 
-      // Stap 2: Laat de AI Curator zoeken naar aanvullingen op onze database
       if (lat !== 0 && lng !== 0) {
         try {
           const result = await searchParksWithCurator(lat, lng, name);
@@ -107,12 +103,12 @@ const App: React.FC = () => {
             return [...prev, ...filteredNewParks];
           });
         } catch (err) {
-          console.warn("AI Search failed, using local db only (Quota reached?)");
+          console.warn("AI Search failed");
         }
       }
       setLoading(false);
     } catch (e: any) {
-      setError(e.message === "API_KEY_MISSING" ? "API sleutel ontbreekt." : "Fout bij laden.");
+      setError("Fout bij laden.");
       setLoading(false);
     }
   }, []);
@@ -132,10 +128,8 @@ const App: React.FC = () => {
     );
   };
 
-  // Deze memo zorgt ervoor dat de resultaten ALTIJD zichtbaar zijn, zelfs als de AI Curator faalt
   const searchResults = useMemo(() => {
     if (!hasSearched) return [];
-
     const query = searchTerm.toLowerCase().trim();
     const resolvedCity = resolvedLocation.toLowerCase().trim();
 
@@ -149,14 +143,11 @@ const App: React.FC = () => {
         p.location.toLowerCase().includes(query) || 
         (p.region && p.region.toLowerCase().includes(query))
       );
-
       const locationMatch = resolvedCity.length > 0 && (
         p.location.toLowerCase().includes(resolvedCity) ||
         (p.region && p.region.toLowerCase().includes(resolvedCity))
       );
-
       const nearbyMatch = distance <= SEARCH_RADIUS_KM;
-
       return { ...p, distance, isMatch: textMatch || locationMatch || nearbyMatch };
     })
     .filter(p => p.isMatch)
@@ -246,7 +237,8 @@ const App: React.FC = () => {
                 <ParkCard 
                   key={p.id} 
                   park={p} 
-                  onClick={(p) => setSelectedPark({...p, searchOrigin: searchCoordinates})} 
+                  // CRITICAL FIX: Geef de huidige zoek-coördinaten altijd mee als vertrekpunt
+                  onClick={(parkData) => setSelectedPark({...parkData, searchOrigin: searchCoordinates})} 
                 />
               ))}
             </div>

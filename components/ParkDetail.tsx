@@ -37,19 +37,19 @@ export const ParkDetail: React.FC<ParkDetailProps> = ({ park, onClose }) => {
     const destLat = park.lat;
     const destLng = park.lng;
     
-    // Google Maps URL format voor route:
-    // https://www.google.com/maps/dir/?api=1&destination=LAT,LNG&origin=LAT,LNG
-    let url = `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}`;
-    
-    if (park.searchOrigin) {
-      url += `&origin=${park.searchOrigin.lat},${park.searchOrigin.lng}`;
+    // Bepaal de origin. Als we lat/lng hebben van de zoekopdracht, gebruik die.
+    // Zo niet, gebruik de magische string 'My+Location' die Google Maps herkent.
+    let originParam = 'My+Location';
+    if (park.searchOrigin && park.searchOrigin.lat !== 0 && park.searchOrigin.lng !== 0) {
+      originParam = `${park.searchOrigin.lat},${park.searchOrigin.lng}`;
     }
     
-    return url;
+    // Gebruik de 'dir' (directions) API van Google Maps voor de meest betrouwbare routebeschrijving
+    return `https://www.google.com/maps/dir/?api=1&destination=${destLat},${destLng}&origin=${originParam}&travelmode=driving`;
   };
   
   const buildDeepSearchUrl = () => {
-    const query = `${park.name} ${park.location} kunstwerk collectie informatie`;
+    const query = `${park.name} ${park.location} sculpture park information`;
     return `https://www.google.com/search?q=${encodeURIComponent(query)}`;
   };
 
@@ -82,7 +82,7 @@ export const ParkDetail: React.FC<ParkDetailProps> = ({ park, onClose }) => {
         <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
           <div className="mb-12">
             <h4 className="text-[10px] font-black uppercase tracking-[0.2em] text-stone-300 mb-4">Context</h4>
-            <p className="text-stone-600 text-xl leading-relaxed serif italic border-l-2 border-stone-100 pl-6">
+            <p className="text-stone-600 text-xl serif leading-relaxed italic border-l-2 border-stone-100 pl-6">
               {park.shortDescription}
             </p>
           </div>
@@ -107,13 +107,10 @@ export const ParkDetail: React.FC<ParkDetailProps> = ({ park, onClose }) => {
 
             {isLoadingDeepDive && (
               <div className="space-y-6 animate-pulse p-4">
-                <div className="flex items-center gap-4 mb-2">
-                  <div className="h-4 w-32 bg-stone-100 rounded"></div>
-                </div>
+                <div className="h-4 w-32 bg-stone-100 rounded"></div>
                 <div className="space-y-3">
                   <div className="h-4 bg-stone-100 rounded w-full"></div>
                   <div className="h-4 bg-stone-100 rounded w-5/6"></div>
-                  <div className="h-4 bg-stone-100 rounded w-4/6"></div>
                 </div>
                 <div className="flex flex-col items-center py-8">
                   <div className="w-10 h-10 border-2 border-blue-600/20 border-t-blue-600 rounded-full animate-spin mb-4"></div>
