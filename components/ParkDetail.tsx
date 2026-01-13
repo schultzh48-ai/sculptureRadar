@@ -153,12 +153,14 @@ export const ParkDetail: React.FC<ParkDetailProps> = ({ park, onClose }) => {
         </div>
 
         <div className="p-8 bg-stone-50/50 border-t border-stone-100 flex items-center justify-center gap-6">
-          {park.website && park.website !== '#' && (
-            <a href={park.website} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-blue-600 flex items-center gap-2 transition-colors">
-              <i className="fas fa-external-link-alt"></i> Officiële Bron
-            </a>
+          {park.website && park.website !== '#' && !isLandArt && (
+            <>
+              <a href={park.website} target="_blank" rel="noopener noreferrer" className="text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-blue-600 flex items-center gap-2 transition-colors">
+                <i className="fas fa-external-link-alt"></i> Officiële Bron
+              </a>
+              <div className="h-4 w-[1px] bg-stone-200"></div>
+            </>
           )}
-          <div className="h-4 w-[1px] bg-stone-200"></div>
           <button onClick={onClose} className="text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-stone-900 transition-colors">Sluiten</button>
         </div>
       </div>
