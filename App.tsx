@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo, useCallback, useEffect } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { SculpturePark } from './types';
 import { ParkCard } from './components/ParkCard';
 import { ParkDetail } from './components/ParkDetail';
@@ -7,12 +7,10 @@ import { ArtistExpert } from './components/ArtistExpert';
 import { getGeocode, searchParksWithCurator } from './services/gemini';
 import { INITIAL_PARKS } from './constants';
 
-// Strikte straal van 50km zoals gevraagd
 const SEARCH_RADIUS_KM = 50; 
-const DUPLICATE_THRESHOLD_KM = 2.0;
+const DUPLICATE_THRESHOLD_KM = 1.0;
 
 function getPreciseDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return 9999;
   const R = 6371;
   const toRad = (n: number) => (n * Math.PI) / 180;
   const dLat = toRad(lat2 - lat1);
@@ -30,8 +28,6 @@ const App: React.FC = () => {
   const [isLocating, setIsLocating] = useState(false);
   
   const [allParks, setAllParks] = useState<SculpturePark[]>(INITIAL_PARKS);
-  const [dbGrowth, setDbGrowth] = useState(0);
-  
   const [searchCoordinates, setSearchCoordinates] = useState<{lat: number, lng: number} | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,105 +38,101 @@ const App: React.FC = () => {
     setError(null);
     setSearchCoordinates(null);
     setResolvedLocation('');
+    setAllParks(INITIAL_PARKS);
   }, []);
 
   const performSearch = useCallback(async (query: string, coords?: {lat: number, lng: number}) => {
-    const trimmedQuery = query.trim();
-    if (!trimmedQuery && !coords) return;
+    const trimmed = query.trim();
+    if (!trimmed && !coords) return;
     
-    setResolvedLocation('');
-    setSearchCoordinates(null);
-    setError(null);
-    setHasSearched(true);
     setLoading(true);
-    
+    setError(null);
+    setResolvedLocation('');
+    setHasSearched(true);
+    setAllParks(INITIAL_PARKS);
+
     try {
       let lat: number, lng: number, name: string;
-      
+
       if (coords) {
         lat = coords.lat;
         lng = coords.lng;
-        name = "Huidige Locatie";
+        name = "Mijn Locatie";
       } else {
-        // We gebruiken Gemini om de plaatsnaam ALTIJD om te zetten naar coördinaten
-        const geo = await getGeocode(trimmedQuery);
-        if (geo) {
-          lat = geo.lat;
-          lng = geo.lng;
-          name = geo.name;
-        } else {
-          setError("Plaatsnaam niet gevonden. Probeer een andere stad.");
+        const geo = await getGeocode(trimmed);
+        if (!geo || !geo.lat || !geo.lng) {
+          setError(`Locatie "${trimmed}" niet gevonden. Probeer een bekendere plaatsnaam.`);
           setLoading(false);
           return;
         }
+        lat = geo.lat;
+        lng = geo.lng;
+        name = geo.name;
       }
 
       setSearchCoordinates({ lat, lng });
       setResolvedLocation(name);
 
-      if (lat !== 0 && lng !== 0) {
-        try {
-          const result = await searchParksWithCurator(lat, lng, name);
-          const newAiParks = (result.parks || []).map((p: any) => ({
-            id: `ai-${Math.random().toString(36).substr(2, 9)}`,
-            name: p.name,
-            location: p.location,
-            shortDescription: p.desc,
-            lat: parseFloat(p.lat),
-            lng: parseFloat(p.lng),
-            isAiDiscovered: true,
-            website: p.url || '#',
-          })).filter((p: any) => !isNaN(p.lat) && !isNaN(p.lng));
+      const result = await searchParksWithCurator(lat, lng, name);
+      if (result && result.parks && result.parks.length > 0) {
+        const newParks = result.parks.map((p: any) => ({
+          id: `ai-${Math.random().toString(36).substr(2, 5)}`,
+          name: p.name,
+          location: p.location,
+          shortDescription: p.desc,
+          lat: parseFloat(p.lat),
+          lng: parseFloat(p.lng),
+          isAiDiscovered: true,
+          website: p.url || '#',
+        })).filter((p: any) => !isNaN(p.lat) && !isNaN(p.lng));
 
-          setAllParks(prev => {
-            const filteredNewParks = newAiParks.filter(aiP => {
-              const isDuplicate = prev.some(existingP => 
-                existingP.name.toLowerCase() === aiP.name.toLowerCase() ||
-                getPreciseDistance(aiP.lat, aiP.lng, existingP.lat, existingP.lng) < DUPLICATE_THRESHOLD_KM
-              );
-              return !isDuplicate;
-            });
-            if (filteredNewParks.length > 0) {
-              setDbGrowth(prevG => prevG + filteredNewParks.length);
-            }
-            return [...prev, ...filteredNewParks];
-          });
-        } catch (err) {
-          console.warn("AI Curator failed to fetch new data, using local storage.");
-        }
+        setAllParks(prev => {
+          const uniqueOnes = newParks.filter(nP => 
+            !prev.some(eP => 
+              eP.name.toLowerCase() === nP.name.toLowerCase() || 
+              getPreciseDistance(nP.lat, nP.lng, eP.lat, eP.lng) < DUPLICATE_THRESHOLD_KM
+            )
+          );
+          return [...prev, ...uniqueOnes];
+        });
       }
-      setLoading(false);
-    } catch (e: any) {
-      setError("Er ging iets mis bij het zoeken.");
+    } catch (e) {
+      setError("Verbindingsfout. Probeer het over een moment opnieuw.");
+    } finally {
       setLoading(false);
     }
   }, []);
 
   const handleGPS = () => {
-    if (!navigator.geolocation) return;
+    if (!navigator.geolocation) {
+      setError("Je browser ondersteunt geen locatiebepaling.");
+      return;
+    }
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setIsLocating(false);
         performSearch("", { lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
-      () => {
-        setError("GPS toegang geweigerd.");
+      (err) => {
+        console.error(err);
+        setError("Geen toegang tot je locatie. Controleer je privacyinstellingen.");
         setIsLocating(false);
-      }
+      },
+      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
     );
   };
 
   const searchResults = useMemo(() => {
     if (!hasSearched || !searchCoordinates) return [];
 
-    // Filter uitsluitend op geografische afstand tot de gezochte plek
-    return allParks.map(p => {
-      const distance = getPreciseDistance(searchCoordinates.lat, searchCoordinates.lng, p.lat, p.lng);
-      return { ...p, distance, isMatch: distance <= SEARCH_RADIUS_KM };
-    })
-    .filter(p => p.isMatch)
-    .sort((a, b) => (a.distance || 0) - (b.distance || 0));
+    return allParks
+      .map(p => ({
+        ...p,
+        distance: getPreciseDistance(searchCoordinates.lat, searchCoordinates.lng, p.lat, p.lng)
+      }))
+      .filter(p => p.distance <= SEARCH_RADIUS_KM)
+      .sort((a, b) => a.distance - b.distance);
   }, [allParks, searchCoordinates, hasSearched]);
 
   return (
@@ -154,73 +146,79 @@ const App: React.FC = () => {
             <h1 className="text-xl font-black serif tracking-tight">Sculptuur<span className="text-blue-600 italic">Radar</span></h1>
           </div>
           <div className="flex items-center gap-6">
-            <div className="hidden md:block text-right">
-              <span className="text-[9px] font-black text-stone-300 uppercase tracking-widest block">Gids Omvang</span>
-              <div className="text-[10px] font-bold text-stone-600 flex items-center gap-1 justify-end">
-                <span>{allParks.length} Locaties</span>
-                {dbGrowth > 0 && <span className="text-blue-500 animate-pulse">+{dbGrowth} AI</span>}
-              </div>
-            </div>
             {hasSearched && (
-              <button onClick={resetSearch} className="text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-stone-900 transition-colors flex items-center gap-2">
-                <i className="fas fa-rotate-left"></i> Opnieuw
+              <button 
+                onClick={resetSearch} 
+                className="text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-stone-900 transition-colors flex items-center gap-2 px-4 py-2 bg-stone-50 rounded-full border border-stone-100"
+              >
+                <i className="fas fa-rotate-left"></i> Nieuwe Zoekopdracht
               </button>
             )}
+            <div className="hidden sm:block text-[10px] font-bold text-stone-400 uppercase tracking-widest">
+              50 KM Straal
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 pb-24">
-        <div className={`${hasSearched ? 'py-8' : 'py-16'} text-center max-w-2xl mx-auto transition-all duration-700`}>
+      <main className="max-w-7xl mx-auto p-6 pb-24 text-center">
+        <div className={`${hasSearched ? 'py-4' : 'py-20'} max-w-2xl mx-auto transition-all duration-500`}>
           {!hasSearched && (
-            <div className="space-y-4 mb-10 animate-in fade-in slide-in-from-top-4 duration-1000">
-              <h2 className="text-5xl md:text-6xl font-bold serif leading-tight tracking-tight">Vind kunst in de <span className="text-blue-600 italic underline decoration-blue-100 underline-offset-8">vrije natuur.</span></h2>
-              <p className="text-stone-500 text-lg serif italic">Typ een plaatsnaam om parken binnen een straal van 50km te vinden.</p>
+            <div className="mb-10 animate-in fade-in duration-1000">
+              <h2 className="text-5xl md:text-6xl font-black serif leading-tight mb-4 tracking-tight">Beeldenparken in <span className="text-blue-600 italic">Spanje & Europa.</span></h2>
+              <p className="text-stone-500 text-lg serif italic">Zoek op plaatsnaam. Stabiele resultaten binnen 50km.</p>
             </div>
           )}
           
-          <div className="space-y-6">
-            <div className="bg-white p-2 rounded-[2.5rem] shadow-2xl border border-stone-100 flex items-center group transition-all focus-within:ring-2 ring-blue-500/20 max-w-xl mx-auto">
+          <div className="relative max-w-xl mx-auto space-y-4">
+            <div className={`bg-white p-2 rounded-[2.5rem] shadow-2xl border border-stone-100 flex items-center transition-all focus-within:ring-4 ring-blue-500/10 ${hasSearched ? 'scale-90 opacity-90' : 'scale-100'}`}>
               <input 
                 className="flex-1 px-8 py-4 outline-none text-lg serif italic bg-transparent" 
-                placeholder="Zoek stad of regio..." 
+                placeholder="Typ een stad..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && performSearch(searchTerm)}
               />
               <button 
                 onClick={() => performSearch(searchTerm)} 
-                disabled={loading}
-                className="bg-stone-900 text-white px-10 py-4 rounded-full font-black uppercase text-xs hover:bg-blue-600 transition-all disabled:opacity-50"
+                disabled={loading || !searchTerm.trim()}
+                className="bg-stone-900 text-white px-10 py-4 rounded-full font-black uppercase text-xs hover:bg-blue-600 transition-all disabled:opacity-30"
               >
                 {loading ? <i className="fas fa-circle-notch animate-spin"></i> : 'Zoek'}
               </button>
             </div>
+            
             {!hasSearched && (
-              <button onClick={handleGPS} disabled={isLocating} className="text-stone-400 hover:text-blue-600 font-bold uppercase text-[10px] tracking-widest flex items-center gap-2 mx-auto transition-all">
-                <i className={`fas fa-location-arrow ${isLocating ? 'animate-bounce' : ''}`}></i> 
-                {isLocating ? 'Bepalen...' : 'Gebruik huidige locatie'}
+              <button 
+                onClick={handleGPS} 
+                disabled={isLocating || loading}
+                className="text-stone-400 hover:text-blue-600 font-bold uppercase text-[10px] tracking-widest flex items-center gap-2 mx-auto transition-all px-4 py-2 hover:bg-white rounded-full"
+              >
+                <i className={`fas fa-location-arrow ${isLocating ? 'animate-bounce text-blue-500' : ''}`}></i> 
+                {isLocating ? 'Lokaliseren...' : 'Zoek op mijn huidige locatie'}
               </button>
             )}
-            {error && <p className="text-red-500 text-xs font-bold uppercase tracking-widest">{error}</p>}
+
+            {error && (
+              <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-2xl text-xs font-bold uppercase tracking-widest animate-in fade-in">
+                {error}
+              </div>
+            )}
           </div>
         </div>
 
-        {hasSearched && (
-          <div className="space-y-12 animate-in fade-in duration-500">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-6">
-              <div className="flex-1 text-left">
+        {hasSearched && !error && (
+          <div className="animate-in fade-in duration-500 mt-8 text-left">
+            <div className="flex items-end justify-between border-b border-stone-100 pb-6 mb-8">
+              <div>
                 <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-1 block">
-                  {searchResults.length} {searchResults.length === 1 ? 'locatie' : 'locaties'} binnen 50km van
+                  {loading ? 'Bezig met zoeken...' : `${searchResults.length} ${searchResults.length === 1 ? 'locatie' : 'locaties'} gevonden rond`}
                 </span>
-                <p className="text-3xl font-bold serif text-stone-800 italic uppercase leading-none">
-                  {resolvedLocation || searchTerm}
-                </p>
+                <p className="text-4xl font-bold serif text-stone-900 italic leading-none">{resolvedLocation || searchTerm}</p>
               </div>
-              {loading && (
-                <div className="flex items-center gap-3 text-blue-400">
-                  <span className="text-[10px] font-black uppercase tracking-widest animate-pulse">De Curator verifieert locaties...</span>
-                  <i className="fas fa-sparkles animate-spin text-xs"></i>
+              {!loading && (
+                <div className="text-[10px] font-bold text-stone-400 uppercase tracking-widest pb-1">
+                  Strikte straal: 50km
                 </div>
               )}
             </div>
@@ -235,18 +233,17 @@ const App: React.FC = () => {
               ))}
             </div>
 
-            {searchResults.length === 0 && !loading && (
-              <div className="text-center py-20 bg-stone-50 rounded-[3rem] border border-dashed border-stone-200">
-                <i className="fas fa-map-marked-alt text-3xl text-stone-200 mb-4 block"></i>
-                <p className="text-stone-400 serif italic text-xl">Geen parken gevonden binnen de straal van 50km.</p>
-                <p className="text-stone-400 text-xs mt-2">Probeer een grotere stad of regio die als middelpunt kan dienen.</p>
-                <button onClick={resetSearch} className="mt-6 text-blue-600 font-black uppercase text-[10px] tracking-widest hover:underline">Terug naar start</button>
+            {!loading && searchResults.length === 0 && (
+              <div className="text-center py-24 bg-stone-50 rounded-[3rem] border border-dashed border-stone-200">
+                <i className="fas fa-map-location-dot text-3xl text-stone-200 mb-4 block"></i>
+                <p className="text-stone-400 serif italic text-xl">Geen parken binnen de 50km straal van {resolvedLocation}.</p>
+                <button onClick={resetSearch} className="mt-6 text-blue-600 font-black uppercase text-[10px] tracking-widest hover:underline">Terug naar overzicht</button>
               </div>
             )}
           </div>
         )}
 
-        <ArtistExpert isVisible={hasSearched} />
+        {hasSearched && !loading && <ArtistExpert isVisible={true} />}
       </main>
       
       {selectedPark && <ParkDetail park={selectedPark} onClose={() => setSelectedPark(null)} />}
