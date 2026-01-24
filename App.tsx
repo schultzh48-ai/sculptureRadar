@@ -26,7 +26,6 @@ const App: React.FC = () => {
   const [resolvedLocation, setResolvedLocation] = useState('');
   const [loading, setLoading] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
-  
   const [allParks, setAllParks] = useState<SculpturePark[]>(INITIAL_PARKS);
   const [searchCoordinates, setSearchCoordinates] = useState<{lat: number, lng: number} | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -47,21 +46,18 @@ const App: React.FC = () => {
     
     setLoading(true);
     setError(null);
-    setResolvedLocation('');
     setHasSearched(true);
-    setAllParks(INITIAL_PARKS);
 
     try {
       let lat: number, lng: number, name: string;
-
       if (coords) {
         lat = coords.lat;
         lng = coords.lng;
         name = "Mijn Locatie";
       } else {
         const geo = await getGeocode(trimmed);
-        if (!geo || !geo.lat || !geo.lng) {
-          setError(`Locatie "${trimmed}" niet gevonden. Probeer een bekendere plaatsnaam.`);
+        if (!geo) {
+          setError(`Locatie "${trimmed}" niet gevonden. Probeer een grotere stad.`);
           setLoading(false);
           return;
         }
@@ -74,7 +70,7 @@ const App: React.FC = () => {
       setResolvedLocation(name);
 
       const result = await searchParksWithCurator(lat, lng, name);
-      if (result && result.parks && result.parks.length > 0) {
+      if (result?.parks) {
         const newParks = result.parks.map((p: any) => ({
           id: `ai-${Math.random().toString(36).substr(2, 5)}`,
           name: p.name,
@@ -88,93 +84,70 @@ const App: React.FC = () => {
 
         setAllParks(prev => {
           const uniqueOnes = newParks.filter(nP => 
-            !prev.some(eP => 
-              eP.name.toLowerCase() === nP.name.toLowerCase() || 
-              getPreciseDistance(nP.lat, nP.lng, eP.lat, eP.lng) < DUPLICATE_THRESHOLD_KM
-            )
+            !prev.some(eP => eP.name.toLowerCase() === nP.name.toLowerCase() || getPreciseDistance(nP.lat, nP.lng, eP.lat, eP.lng) < DUPLICATE_THRESHOLD_KM)
           );
           return [...prev, ...uniqueOnes];
         });
       }
-    } catch (e) {
-      setError("Verbindingsfout. Probeer het over een moment opnieuw.");
+    } catch (e: any) {
+      setError(e.message || "Er ging iets mis bij het raadplegen van de beveiligde server.");
     } finally {
       setLoading(false);
     }
   }, []);
 
   const handleGPS = () => {
-    if (!navigator.geolocation) {
-      setError("Je browser ondersteunt geen locatiebepaling.");
-      return;
-    }
+    if (!navigator.geolocation) return;
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setIsLocating(false);
         performSearch("", { lat: pos.coords.latitude, lng: pos.coords.longitude });
       },
-      (err) => {
-        console.error(err);
-        setError("Geen toegang tot je locatie. Controleer je privacyinstellingen.");
-        setIsLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      () => setIsLocating(false)
     );
   };
 
   const searchResults = useMemo(() => {
     if (!hasSearched || !searchCoordinates) return [];
-
     return allParks
-      .map(p => ({
-        ...p,
-        distance: getPreciseDistance(searchCoordinates.lat, searchCoordinates.lng, p.lat, p.lng)
-      }))
+      .map(p => ({ ...p, distance: getPreciseDistance(searchCoordinates.lat, searchCoordinates.lng, p.lat, p.lng) }))
       .filter(p => p.distance <= SEARCH_RADIUS_KM)
       .sort((a, b) => a.distance - b.distance);
   }, [allParks, searchCoordinates, hasSearched]);
 
   return (
-    <div className="min-h-screen bg-[#fbfbf9] text-stone-900 text-sm">
+    <div className="min-h-screen bg-[#fbfbf9] text-stone-900 text-sm selection:bg-blue-100 selection:text-blue-900">
       <header className="bg-white/90 backdrop-blur-md border-b border-stone-100 p-4 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-3 cursor-pointer" onClick={resetSearch}>
-            <div className="w-9 h-9 bg-stone-900 rounded-xl flex items-center justify-center text-white shadow-lg">
+          <div className="flex items-center gap-3 cursor-pointer group" onClick={resetSearch}>
+            <div className="w-10 h-10 bg-stone-900 rounded-xl flex items-center justify-center text-white shadow-lg group-hover:bg-blue-600 transition-colors">
               <i className="fas fa-landmark text-sm"></i>
             </div>
             <h1 className="text-xl font-black serif tracking-tight">Sculptuur<span className="text-blue-600 italic">Radar</span></h1>
           </div>
-          <div className="flex items-center gap-6">
-            {hasSearched && (
-              <button 
-                onClick={resetSearch} 
-                className="text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-stone-900 transition-colors flex items-center gap-2 px-4 py-2 bg-stone-50 rounded-full border border-stone-100"
-              >
-                <i className="fas fa-rotate-left"></i> Nieuwe Zoekopdracht
-              </button>
-            )}
-            <div className="hidden sm:block text-[10px] font-bold text-stone-400 uppercase tracking-widest">
-              50 KM Straal
-            </div>
-          </div>
+          {hasSearched && (
+            <button onClick={resetSearch} className="text-[10px] font-black uppercase tracking-widest text-stone-400 hover:text-stone-900 transition-all px-5 py-2.5 bg-stone-50 rounded-full border border-stone-100">
+              <i className="fas fa-rotate-left mr-2"></i> Nieuwe Zoekopdracht
+            </button>
+          )}
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6 pb-24 text-center">
-        <div className={`${hasSearched ? 'py-4' : 'py-20'} max-w-2xl mx-auto transition-all duration-500`}>
+      <main className="max-w-7xl mx-auto p-6 pb-24">
+        <div className={`${hasSearched ? 'py-4' : 'py-20'} max-w-2xl mx-auto text-center transition-all duration-700`}>
           {!hasSearched && (
-            <div className="mb-10 animate-in fade-in duration-1000">
-              <h2 className="text-5xl md:text-6xl font-black serif leading-tight mb-4 tracking-tight">Sculptuur<span className="text-blue-600 italic">Radar.</span></h2>
-              <p className="text-stone-500 text-lg serif italic">Ontdek beeldenparken en openluchtmusea in Spanje & Europa.</p>
+            <div className="mb-10 animate-in fade-in slide-in-from-bottom-4 duration-1000">
+              <h2 className="text-5xl md:text-7xl font-black serif leading-tight mb-6 tracking-tight">Sculptuur<span className="text-blue-600 italic">Radar.</span></h2>
+              <p className="text-stone-500 text-xl serif italic max-w-lg mx-auto leading-relaxed">Uw beveiligde gids naar de meest indrukwekkende beeldenparken van Europa.</p>
             </div>
           )}
           
           <div className="relative max-w-xl mx-auto space-y-4">
             <div className={`bg-white p-2 rounded-[2.5rem] shadow-2xl border border-stone-100 flex items-center transition-all focus-within:ring-4 ring-blue-500/10 ${hasSearched ? 'scale-90 opacity-90' : 'scale-100'}`}>
               <input 
-                className="flex-1 px-8 py-4 outline-none text-lg serif italic bg-transparent" 
-                placeholder="Typ een stad..." 
+                className="flex-1 px-8 py-4 outline-none text-lg serif italic bg-transparent placeholder:text-stone-300" 
+                placeholder="Zoek een stad (bijv. Madrid of Arnhem)..." 
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && performSearch(searchTerm)}
@@ -182,62 +155,60 @@ const App: React.FC = () => {
               <button 
                 onClick={() => performSearch(searchTerm)} 
                 disabled={loading || !searchTerm.trim()}
-                className="bg-stone-900 text-white px-10 py-4 rounded-full font-black uppercase text-xs hover:bg-blue-600 transition-all disabled:opacity-30"
+                className="bg-stone-900 text-white px-10 py-4 rounded-full font-black uppercase text-xs hover:bg-blue-600 transition-all disabled:opacity-30 shadow-lg shadow-stone-200"
               >
-                {loading ? <i className="fas fa-circle-notch animate-spin"></i> : 'Zoek'}
+                {loading ? <i className="fas fa-circle-notch animate-spin"></i> : 'Ontdek'}
               </button>
             </div>
             
             {!hasSearched && (
-              <button 
-                onClick={handleGPS} 
-                disabled={isLocating || loading}
-                className="text-stone-400 hover:text-blue-600 font-bold uppercase text-[10px] tracking-widest flex items-center gap-2 mx-auto transition-all px-4 py-2 hover:bg-white rounded-full"
-              >
+              <button onClick={handleGPS} disabled={isLocating || loading} className="text-stone-400 hover:text-blue-600 font-bold uppercase text-[10px] tracking-widest flex items-center gap-2 mx-auto transition-all px-4 py-2 hover:bg-white rounded-full">
                 <i className={`fas fa-location-arrow ${isLocating ? 'animate-bounce text-blue-500' : ''}`}></i> 
-                {isLocating ? 'Lokaliseren...' : 'Zoek op mijn huidige locatie'}
+                {isLocating ? 'Lokaliseren...' : 'Gebruik huidige locatie'}
               </button>
             )}
 
-            {error && (
-              <div className="mt-4 p-4 bg-red-50 text-red-600 rounded-2xl text-xs font-bold uppercase tracking-widest animate-in fade-in">
-                {error}
-              </div>
-            )}
+            {error && <div className="mt-4 p-5 bg-red-50 text-red-700 border border-red-100 rounded-3xl text-xs font-bold uppercase tracking-widest animate-in fade-in slide-in-from-top-2">{error}</div>}
           </div>
         </div>
 
-        {hasSearched && !error && (
-          <div className="animate-in fade-in duration-500 mt-8 text-left">
+        {hasSearched && (
+          <div className="mt-8 animate-in fade-in duration-700">
             <div className="flex items-end justify-between border-b border-stone-100 pb-6 mb-8">
               <div>
-                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-1 block">
-                  {loading ? 'Bezig met zoeken...' : `${searchResults.length} ${searchResults.length === 1 ? 'locatie' : 'locaties'} gevonden rond`}
-                </span>
-                <p className="text-4xl font-bold serif text-stone-900 italic leading-none">{resolvedLocation || searchTerm}</p>
+                <span className="text-[10px] font-black uppercase tracking-widest text-blue-600 mb-1 block">Gecureerde selectie rond</span>
+                <p className="text-4xl font-bold serif text-stone-900 italic leading-none tracking-tight">{resolvedLocation || searchTerm}</p>
               </div>
-              {!loading && (
-                <div className="text-[10px] font-bold text-stone-400 uppercase tracking-widest pb-1">
-                  Strikte straal: 50km
-                </div>
-              )}
+              <div className="hidden sm:block text-[10px] font-black text-stone-300 uppercase tracking-widest">
+                Straling 50km
+              </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {searchResults.map((p) => (
-                <ParkCard 
-                  key={p.id} 
-                  park={p} 
-                  onClick={(parkData) => setSelectedPark({...parkData, searchOrigin: searchCoordinates})} 
-                />
-              ))}
-            </div>
+            {loading && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="bg-white rounded-[2rem] p-8 border border-stone-50 h-[280px] animate-pulse">
+                    <div className="h-3 w-20 bg-stone-100 rounded mb-4"></div>
+                    <div className="h-6 w-40 bg-stone-100 rounded mb-4"></div>
+                    <div className="h-3 w-full bg-stone-50 rounded mb-2"></div>
+                    <div className="h-3 w-4/5 bg-stone-50 rounded"></div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!loading && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {searchResults.map((p) => (
+                  <ParkCard key={p.id} park={p} onClick={(parkData) => setSelectedPark({...parkData, searchOrigin: searchCoordinates})} />
+                ))}
+              </div>
+            )}
 
             {!loading && searchResults.length === 0 && (
-              <div className="text-center py-24 bg-stone-50 rounded-[3rem] border border-dashed border-stone-200">
-                <i className="fas fa-map-location-dot text-3xl text-stone-200 mb-4 block"></i>
-                <p className="text-stone-400 serif italic text-xl">Geen parken binnen de 50km straal van {resolvedLocation}.</p>
-                <button onClick={resetSearch} className="mt-6 text-blue-600 font-black uppercase text-[10px] tracking-widest hover:underline">Terug naar overzicht</button>
+              <div className="text-center py-24 bg-stone-50/50 rounded-[3rem] border border-dashed border-stone-200">
+                <p className="text-stone-400 serif italic text-xl mb-4">Geen beeldenparken gevonden binnen 50km van deze locatie.</p>
+                <button onClick={resetSearch} className="text-blue-600 font-black uppercase text-[10px] tracking-widest hover:underline">Probeer een andere stad</button>
               </div>
             )}
           </div>
@@ -247,6 +218,10 @@ const App: React.FC = () => {
       </main>
       
       {selectedPark && <ParkDetail park={selectedPark} onClose={() => setSelectedPark(null)} />}
+      
+      <footer className="max-w-7xl mx-auto p-12 text-center text-stone-300">
+        <p className="text-[10px] font-black uppercase tracking-[0.3em]">SculptuurRadar &copy; 2024 — Beveiligde Curator</p>
+      </footer>
     </div>
   );
 };
